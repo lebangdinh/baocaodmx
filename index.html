@@ -92,9 +92,9 @@ table thead th:hover {
 }
 
 .is-exporting-screen .export-stack-two-columns {
-  width: 1250px !important;
-  min-width: 1250px !important;
-  max-width: 1250px !important;
+  width: 1280px !important;
+  min-width: 1280px !important;
+  max-width: 1280px !important;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   column-gap: 10px !important;
 }
@@ -102,20 +102,89 @@ table thead th:hover {
 .is-exporting-screen .export-competition-table {
   width: 100% !important;
   min-width: 0 !important;
-  table-layout: auto !important;
+  table-layout: fixed !important;
 }
 
+/* Ảnh xuất: ưu tiên diện tích cho Tên môn, ép gọn các cột số */
 .is-exporting-screen .export-competition-table th,
 .is-exporting-screen .export-competition-table td {
-  white-space: nowrap;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
 }
 
-.is-exporting-screen .export-competition-table th:first-child,
-.is-exporting-screen .export-competition-table td:first-child {
-  width: 135px !important;
-  min-width: 135px !important;
-  max-width: 135px !important;
+.is-exporting-screen .export-competition-table thead th {
+  font-size: 9.5px !important;
+  line-height: 1.1 !important;
   white-space: normal !important;
+  word-break: normal !important;
+}
+
+.is-exporting-screen .export-competition-table tbody td {
+  font-size: 10.5px !important;
+  line-height: 1.18 !important;
+  white-space: nowrap !important;
+}
+
+/* Tên môn: rộng nhất, cho phép xuống dòng khi thật sự cần */
+.is-exporting-screen .export-competition-table th:nth-child(1),
+.is-exporting-screen .export-competition-table td:nth-child(1) {
+  width: 42% !important;
+  min-width: 42% !important;
+  max-width: 42% !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  padding-left: 7px !important;
+  padding-right: 6px !important;
+}
+
+/* Cách tính */
+.is-exporting-screen .export-competition-table th:nth-child(2),
+.is-exporting-screen .export-competition-table td:nth-child(2) {
+  width: 6.5% !important;
+  min-width: 6.5% !important;
+  max-width: 6.5% !important;
+  text-align: center !important;
+}
+
+/* Lũy kế */
+.is-exporting-screen .export-competition-table th:nth-child(3),
+.is-exporting-screen .export-competition-table td:nth-child(3) {
+  width: 9.5% !important;
+  min-width: 9.5% !important;
+  max-width: 9.5% !important;
+}
+
+/* Hôm nay */
+.is-exporting-screen .export-competition-table th:nth-child(4),
+.is-exporting-screen .export-competition-table td:nth-child(4) {
+  width: 8.5% !important;
+  min-width: 8.5% !important;
+  max-width: 8.5% !important;
+}
+
+/* Chốt */
+.is-exporting-screen .export-competition-table th:nth-child(5),
+.is-exporting-screen .export-competition-table td:nth-child(5) {
+  width: 8.5% !important;
+  min-width: 8.5% !important;
+  max-width: 8.5% !important;
+}
+
+/* Target: chừa thêm chỗ cho số lớn */
+.is-exporting-screen .export-competition-table th:nth-child(6),
+.is-exporting-screen .export-competition-table td:nth-child(6) {
+  width: 14% !important;
+  min-width: 14% !important;
+  max-width: 14% !important;
+}
+
+/* % HT */
+.is-exporting-screen .export-competition-table th:nth-child(7),
+.is-exporting-screen .export-competition-table td:nth-child(7) {
+  width: 11% !important;
+  min-width: 11% !important;
+  max-width: 11% !important;
+  text-align: center !important;
 }
 
 .is-exporting-screen .export-revenue-progress tbody td:not(:first-child) {
