@@ -14,5 +14,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm init -y
-      - run: npm install --no-save --no-package-lock --ignore-scripts @babel/standalone@7.28.4
+      - run: npm install --no-save --no-package-lock --ignore-scripts @babel/standalone@7.28.4 react@18.3.1 react-dom@18.3.1
       - run: node tests/hrm-regression.cjs
+      - run: node tests/hrm-ssr.cjs
