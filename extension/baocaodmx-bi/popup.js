@@ -12,7 +12,7 @@ async function state(){
   finally{refreshing=false;}
 }
 run.onclick=async()=>{
-  run.disabled=true;status.textContent='Đang mở trang thử và kiểm tra đăng nhập…';
+  run.disabled=true;status.textContent='Đang kết nối baocaodmx và kiểm tra đăng nhập…';
   try{const r=await chrome.runtime.sendMessage({type:'start',profile:document.getElementById('profile').value});if(!r)throw Error('Tiện ích chưa phản hồi. Tải lại tiện ích rồi thử lại.');status.textContent=r.message;}
   catch(e){status.textContent=e.message;run.disabled=false;}
 };

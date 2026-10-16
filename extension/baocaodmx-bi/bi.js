@@ -26,13 +26,12 @@ async function tab(name) {
 }
 
 async function ticks() {
-  const list = bs().filter(b => /px-2\.5 py-1 text-xs font-medium transition-all/.test(b.className));
-  for (const b of list) {
-    const state=b.getAttribute('aria-pressed')||b.getAttribute('aria-checked')||b.getAttribute('data-state');
-    if(state==='true'||state==='checked'||state==='on')continue;
-    if(state==='false'||state==='unchecked'||state==='off'||(b.firstElementChild && btxt(b.firstElementChild)==='' && !b.querySelector('svg'))){b.click();await sleep(100);}
+  // Enable only the columns used by the existing parser; do not toggle every
+  // display option or mistake the selected view tabs for checkboxes.
+  for(const name of ['Tỉ trọng','Tỷ trọng','Target','Tăng trưởng']){
+    const control=[...document.querySelectorAll('button,label,[role=checkbox]')].find(e=>vis(e)&&txt(e).replace(/[✓✔☑]/g,'').trim()===name);
+    if(control&&revenueDetailState(control)===false){control.click();await sleep(150);}
   }
-
 }
 
 // Required on the consolidated revenue page, including the employee tab.
@@ -79,7 +78,7 @@ async function dtqd() {
 }
 
 function isSelectedButton(button) {
-  return !!button && (/(?:^|\s)bg-blue-600(?:\s|$)/.test(button.className) ||
+  return !!button && (blueSelected(button) || /(?:^|\s)bg-blue-600(?:\s|$)/.test(button.className) ||
     button.getAttribute('aria-selected')==='true' || button.getAttribute('aria-pressed')==='true' ||
     button.getAttribute('data-state')==='active');
 }
@@ -101,25 +100,30 @@ async function setPeriod(mode) {
   await selectPair(mode==='month'?'Lũy kế':'Realtime',mode==='month'?'Realtime':'Lũy kế');
 }
 
-// Select only the requested store. Never broaden area scope.
-let requestedStore = '';
+// Combined filters mirror the user's copy-paste workflow. Only employee
+// competition requests one store; all other jobs request both stores together.
+let requestedStore = '', requestedPeriod = '';
+function storeFilterLabels(){
+ return [...document.querySelectorAll('label')].filter(l=>vis(l)&&l.querySelector('input[type=checkbox]')&&/^\d+\s*[-–—]/.test(txt(l)));
+}
+function labelStoreCode(label){return txt(label).match(/^(\d+)\s*[-–—]/)?.[1];}
+function desiredStoreCodes(){return requestedStore==='both'?['933','10341']:[requestedStore];}
 async function area() {
-  const b = bs().find(x => /^Siêu thị/.test(btxt(x)));
-  if (!b) return 'Không thấy bộ lọc Siêu thị';
-  b.click();
-  const labels = await waitFor(() => [...document.querySelectorAll('label')].filter(l => vis(l) && l.querySelector('input[type=checkbox]') && /^\d+\s*[-–—]/.test(btxt(l))), 5000);
-  if (!labels) return 'Không đọc được danh sách Siêu thị';
-  const code = l => (btxt(l).match(/^(\d+)\s*[-–—]/)||[])[1];
-  const target = labels.find(l => code(l) === requestedStore);
-  if (!target) {b.click();return 'Không có siêu thị '+requestedStore+' trong bộ lọc. Kiểm tra quyền/bộ lọc BI.';}
-  for (const l of labels) {
-    const want=code(l)===requestedStore;
-    if(l.querySelector('input').checked!==want){l.click();await sleep(120);}
+  let button=bs().find(x=>/^Siêu thị/.test(btxt(x)));
+  if(!button)return 'Không thấy bộ lọc Siêu thị';
+  button.click();
+  const labels=await waitFor(storeFilterLabels,5000),wanted=desiredStoreCodes();
+  if(!labels)return 'Không đọc được danh sách Siêu thị';
+  if(!wanted.every(code=>labels.some(l=>labelStoreCode(l)===code))){button.click();return 'Bộ lọc chưa có đủ shop '+wanted.join(' + ');}
+  for(const code of labels.map(labelStoreCode)){
+    const current=storeFilterLabels().find(l=>labelStoreCode(l)===code);
+    if(!current)return 'Danh sách siêu thị thay đổi; chưa xác minh được bộ lọc.';
+    if(current.querySelector('input').checked!==wanted.includes(code)){current.click();await sleep(180);}
   }
-  const checked=labels.filter(l=>l.querySelector('input').checked);
-  const ok=checked.length===1 && code(checked[0])===requestedStore;
-  b.click();await sleep(400);
-  return ok?'':'Chưa chọn đúng một siêu thị '+requestedStore;
+  const selected=storeFilterLabels().filter(l=>l.querySelector('input').checked).map(labelStoreCode);
+  const ok=selected.length===wanted.length&&wanted.every(code=>selected.includes(code));
+  button=bs().find(x=>/^Siêu thị/.test(btxt(x)));if(button)button.click();await sleep(400);
+  return ok?'':'Chưa chọn đúng shop '+wanted.join(' + ');
 }
 
 function pageText() {
@@ -147,6 +151,7 @@ async function reloadAndCapture(measure) {
   await ensureRevenueDetails();
   const wanted=measure==='qd'?'DT quy đổi':'DT thực';
   if(!isSelectedButton(pairButton(wanted)))throw Error('Chế độ doanh thu thay đổi trước khi lấy bảng.');
+  if(requestedPeriod&&!isSelectedButton(pairButton(requestedPeriod==='month'?'Lũy kế':'Realtime')))throw Error('Chế độ Lũy kế/Realtime thay đổi trước khi lấy bảng.');
   const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
   if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
   rb[0].click();
@@ -156,9 +161,9 @@ async function reloadAndCapture(measure) {
   while (Date.now() < end) {
     const busy = document.querySelector('[aria-busy=true],.animate-spin,[class*=spinner]');
     const t = pageText();
-    const head = (t.match(/SỐ LƯỢNG[^\n]*\n\s*(DOANH THU[^\n]*)/) || [])[1] || '';
+    const head = [...document.querySelectorAll('thead th')].filter(vis).map(txt).find(h=>/^DOANH THU/i.test(h)) || (t.match(/SỐ LƯỢNG[^\n]*\n\s*(DOANH THU[^\n]*)/)||[])[1] || '';
     const rightMeasure = measure === 'qd' ? /QĐ|QUY ĐỔI/i.test(head) : (head && !/QĐ|QUY ĐỔI/i.test(head));
-    const hasRow = /\n\d+\s*-\s*[^\n]+\n[\d,.]+\t/.test(t);
+    const hasRow = [...document.querySelectorAll('tbody tr')].some(row=>/^(?:\d{3,7}|online)\s*[-–—]/i.test(txt(row))) || /\n\d+\s*-\s*[^\n]+\n[\d,.]+\t/.test(t);
     if (!busy && rightMeasure && hasRow && /DT TRẢ GÓP/i.test(t)) {
       stable = t === last ? stable + 1 : 0;
       if (stable >= 6) return { ok: true, text: t };
@@ -179,7 +184,7 @@ async function run(mode, progress) {
   await setPeriod(mode);
   await ticks();
   const ae = await area();
-  if (ae) return { ok: false, error: 'Không chọn được Khu vực: ' + ae };
+  if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
   // SKST cần cả DT thực và DT quy đổi (BI chỉ hiện một loại mỗi lần) → lấy lần lượt hai bảng.
   const got = {};
   for (const measure of ['thuc', 'qd']) {
@@ -204,7 +209,7 @@ async function runCompete(mode, progress) {
   const dl = bs().find((x) => btxt(x) === 'Danh sách');
   if (dl && !/bg-blue-600/.test(dl.className)) { dl.click(); await sleep(500); }
   const ae = await area();
-  if (ae) return { ok: false, error: 'Không chọn được Khu vực: ' + ae };
+  if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
   const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
   if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
   rb[0].click();
@@ -238,6 +243,7 @@ async function runEmpRev(mode, progress) {
   progress('Đang chọn '+(mode==='realtime'?'Realtime':'Lũy kế')+' trên Doanh thu hợp nhất…');
   await setPeriod(mode);
   await ticks();
+  const ae=await area();if(ae)return {ok:false,error:'Không chọn được Siêu thị: '+ae};
   const got = {};
   for (const measure of ['thuc', 'qd']) {
     progress(measure === 'thuc' ? 'Đang tải DT thực…' : 'Đang tải DT quy đổi…');
@@ -279,7 +285,7 @@ async function runEmpComp(mode, progress, store) {
   const dl = bs().find((x) => btxt(x) === 'Danh sách');
   if (dl && !/bg-blue-600/.test(dl.className)) { dl.click(); await sleep(500); }
   const ae = await area();
-  if (ae) return { ok: false, error: 'Không chọn được Khu vực: ' + ae };
+  if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
   const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
   if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
   rb[0].click();
@@ -344,19 +350,15 @@ function reportMonth(text){
   return match?match[2]+'-'+match[1].padStart(2,'0'):null;
 }
 async function runChecked(m,progress){
-  if(!['933','10341'].includes(m.store)||!['month','realtime'].includes(m.mode))throw Error('Yêu cầu không hợp lệ.');
+  if(!(m.job==='empComp'?['933','10341'].includes(m.store):m.store==='both')||!['month','realtime'].includes(m.mode))throw Error('Yêu cầu không hợp lệ.');
   if(/login|signin|dang-nhap/i.test(location.pathname))throw Error('Đăng nhập BI bằng SSO trước khi chạy.');
-  requestedStore=m.store;
+  requestedStore=m.store;requestedPeriod=m.mode;
   await waitFor(()=>bs().find(x=>m.job==='installment'?btxt(x)==='Xem':/Tải lại/i.test(btxt(x))),25000);
   for(const button of bs().filter(x=>/^(Ngành hàng|Nhóm hàng)/.test(btxt(x)) && btxt(x)!=='Ngành hàng BI')){
     if(!/Chọn\s*$/.test(btxt(button)))throw Error('BI còn bộ lọc ngành/nhóm hàng. Bỏ bộ lọc đó trước để lấy đủ báo cáo.');
   }
   const fn={revenue:run,compete:runCompete,empRev:runEmpRev,empComp:runEmpComp,installment:runInstallment}[m.job];
   if(!fn)throw Error('Loại báo cáo không hỗ trợ.');
-  if(m.job==='empRev'){
-    await waitFor(()=>bs().find(x=>/Tải lại/i.test(btxt(x))),25000);
-    const error=await area();if(error)throw Error(error);
-  }
   const result=await fn(m.mode,progress,m.store);
   if(!result.ok)return result;
   for(const t of [result.text,result.textThuc].filter(Boolean)){

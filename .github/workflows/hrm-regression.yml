@@ -14,6 +14,14 @@ jobs:
         with:
           node-version: '22'
       - run: npm init -y
-      - run: npm install --no-save --no-package-lock --ignore-scripts @babel/standalone@7.28.4 react@18.3.1 react-dom@18.3.1
+      - run: npm install --no-save --no-package-lock --ignore-scripts @babel/standalone@7.28.4 react@18.3.1 react-dom@18.3.1 react-test-renderer@18.3.1
       - run: node tests/hrm-regression.cjs
       - run: node tests/hrm-ssr.cjs
+      - run: node tests/bi-extension.cjs
+      - run: node tests/bi-extension-auth.cjs
+      - run: node tests/bi-detail-toggle.cjs
+      - run: node tests/bi-selected-buttons.cjs
+      - run: node tests/bi-control-discovery.cjs
+      - run: node tests/bi-start-connection.cjs
+      - run: node tests/bi-combined-collection.cjs
+      - run: node tests/realtime-personnel.cjs

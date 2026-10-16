@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "SKST Cụm 933 — Thử lấy BI",
-  "version": "1.0.3",
+  "name": "SKST Cụm 933 — Lấy BI & tự nhập",
+  "version": "1.1.0",
   "description": "Lấy báo cáo BI và chuyển vào baocaodmx qua quyền Firebase hiện có.",
   "permissions": [
     "tabs"
@@ -20,6 +20,8 @@
   "content_scripts": [
     {
       "matches": [
+        "https://lebangdinh.github.io/baocaodmx/",
+        "https://lebangdinh.github.io/baocaodmx/index.html",
         "https://lebangdinh.github.io/baocaodmx/bi-test.html"
       ],
       "js": [
