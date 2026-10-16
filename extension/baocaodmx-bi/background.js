@@ -2,7 +2,8 @@ const SITE='https://lebangdinh.github.io/baocaodmx/bi-test.html';
 const BI='https://baocao.dienmayxanh.com';
 const URLS={revenue:BI+'/dashboard/revenue-consolidated',empRev:BI+'/dashboard/revenue-consolidated',compete:BI+'/dashboard/thi-dua',empComp:BI+'/dashboard/thi-dua',installment:BI+'/dashboard/tra-cham'};
 const LABELS={revenue:'Doanh thu siêu thị',compete:'Thi đua siêu thị',empRev:'Doanh thu nhân viên',empComp:'Thi đua nhân viên',installment:'Trả chậm'};
-let active=null, message='Sẵn sàng. Mở tab baocaodmx để bắt đầu.';
+let active=null, message='Sẵn sàng. Bấm Lấy dữ liệu thử để bắt đầu.';
+function badge(text,color){chrome.action.setBadgeText({text}).catch(()=>{});chrome.action.setBadgeBackgroundColor({color}).catch(()=>{});}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function onSite(url){try{const u=new URL(url);return u.origin==='https://lebangdinh.github.io'&&/^\/baocaodmx\//.test(u.pathname);}catch{return false;}}
 async function page(tabId,kind,data={}) {return chrome.tabs.sendMessage(tabId,{channel:'skst933',kind,...data});}
@@ -14,9 +15,10 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   if(m.type==='start'){
     if(active){reply({message:'Đang có lượt đồng bộ chạy.'});return;}
     if(!['all','month','realtime'].includes(m.profile)){reply({message:'Lựa chọn không hợp lệ.'});return;}
+    message='Đang mở trang thử và kiểm tra đăng nhập…';badge('…','#2563eb');
     active={id:crypto.randomUUID(),cancelled:false,biTab:null};
     start(active,m.profile).catch(e=>{message=e.message;}).finally(()=>{active=null;});
-    reply({message:'Đang kiểm tra đăng nhập SKST…'});
+    reply({message});
   }
 });
 async function waitComplete(id){for(let n=0;n<120;n++){const t=await chrome.tabs.get(id);if(t.status==='complete')return;await sleep(500);}throw Error('Trang BI tải quá lâu.');}
@@ -40,8 +42,22 @@ async function start(run,profile){
     const tabs=await chrome.tabs.query({});
     const candidates=tabs.filter(t=>t.url?.split(/[?#]/)[0]===SITE);
     appTab=candidates.find(t=>t.active)|| (candidates.length===1?candidates[0]:null);
-    if(!appTab)throw Error(candidates.length?'Có nhiều tab baocaodmx: chọn đúng tab rồi chạy lại.':'Hãy mở '+SITE+' rồi chạy tiện ích.');
-    const ready=await page(appTab.id,'prepare',{runId:run.id,profile});
+    if(!appTab&&candidates.length)throw Error('Có nhiều tab thử SKST: chọn đúng tab rồi chạy lại.');
+    if(!appTab){
+      message='Đang mở trang thử SKST…';
+      appTab=await chrome.tabs.create({url:SITE,active:true});
+      await waitComplete(appTab.id);
+    }
+    let ready;
+    try{ready=await page(appTab.id,'prepare',{runId:run.id,profile});}
+    catch(e){
+      // Installing/reloading an extension does not inject it into an already open
+      // tab. Reload this preview page once to activate the installed bridge.
+      if(!/receiving end|could not establish connection/i.test(e.message||''))throw e;
+      message='Đang tải lại trang thử để kết nối tiện ích…';
+      await chrome.tabs.reload(appTab.id);await sleep(500);await waitComplete(appTab.id);
+      ready=await page(appTab.id,'prepare',{runId:run.id,profile});
+    }
     if(!ready?.ok)throw Error(ready?.error||'Tải lại baocaodmx để nhận bản hỗ trợ tiện ích.');
     const modes=profile==='all'?['month','realtime']:[profile];
     const jobs=[];
@@ -67,10 +83,10 @@ async function start(run,profile){
     }
     if(run.cancelled)throw Error('Đã dừng. Chưa nhập dữ liệu của lượt này.');
     run.committing=true;
-    await progress('Đang kiểm tra dữ liệu và đồng bộ Firebase…');
+    await progress('Đang kiểm tra và tổng hợp kết quả thử…');
     const result=await page(appTab.id,'commit',{runId:run.id,results,errors});
     if(!result?.ok)throw Error(result?.error||'Chưa hoàn tất nhập dữ liệu.');
-    message=result.message;
-  }catch(e){await progress(e.message);if(appTab)await page(appTab.id,'abort',{runId:run.id,message:e.message}).catch(()=>{});}
+    message=result.message;badge('OK','#15803d');
+  }catch(e){badge('!','#dc2626');await progress(e.message);if(appTab)await page(appTab.id,'abort',{runId:run.id,message:e.message}).catch(()=>{});}
   finally{clearInterval(beat);if(run.biTab)await chrome.tabs.remove(run.biTab).catch(()=>{});if(appTab)await chrome.tabs.update(appTab.id,{active:true}).catch(()=>{});}
 }

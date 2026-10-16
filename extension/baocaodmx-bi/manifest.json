@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SKST Cụm 933 — Thử lấy BI",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Lấy báo cáo BI và chuyển vào baocaodmx qua quyền Firebase hiện có.",
   "permissions": [
     "tabs"

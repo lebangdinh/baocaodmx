@@ -1,4 +1,4 @@
-# SKST Cụm 933 — Thử lấy BI (1.0.1)
+# SKST Cụm 933 — Thử lấy BI (1.0.2)
 
 ## Cài một lần trên mỗi máy Windows/Mac
 
@@ -54,3 +54,5 @@ Phần thao tác BI phát triển từ file skst-bi-extension.zip do người d�
 Trạng thái nút: nền xanh đậm là đang chọn. Tiện ích kiểm tra hai cặp Lũy kế/Realtime và DT thực/DT quy đổi bằng trạng thái nút, đọc lại sau khi giao diện cập nhật; không suy ra kỳ báo cáo từ tên cột.
 
 Bản 1.0.1 chỉ chạy với trang bi-test.html. Sau khi đối chiếu thành công mới phát hành bản kết nối trang chính để ghi Firebase.
+
+Bản 1.0.2: hiện tiến độ/lỗi liên tục trong cửa sổ tiện ích; biểu tượng có dấu … khi chạy, ! khi lỗi, OK khi xong; tự mở trang thử nếu chưa mở, tự tải lại một lần nếu tab có từ trước lúc cài tiện ích.
