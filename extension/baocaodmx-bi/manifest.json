@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "SKST Cụm 933 — Thử lấy BI",
+  "version": "1.0.1",
+  "description": "Lấy báo cáo BI và chuyển vào baocaodmx qua quyền Firebase hiện có.",
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://baocao.dienmayxanh.com/*",
+    "https://lebangdinh.github.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Đồng bộ SKST"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://lebangdinh.github.io/baocaodmx/bi-test.html"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://baocao.dienmayxanh.com/*"
+      ],
+      "js": [
+        "bi.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
