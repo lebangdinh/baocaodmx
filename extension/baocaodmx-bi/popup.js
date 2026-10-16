@@ -21,3 +21,13 @@ state();
 // A run continues after the popup closes. Reopening it shows the current result.
 const poll=setInterval(state,700);
 window.addEventListener('pagehide',()=>clearInterval(poll));
+
+document.getElementById('inspect').onclick=async()=>{
+ try{
+  const result=await chrome.runtime.sendMessage({type:'inspect'});
+  if(!result?.ok)throw Error(result?.error||'Chưa đọc được nút trên BI.');
+  const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='skst-bi-controls.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+ }catch(e){status.textContent=e.message;}
+};

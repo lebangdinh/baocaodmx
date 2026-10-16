@@ -1,4 +1,4 @@
-# SKST Cụm 933 — Thử lấy BI (1.0.2)
+# SKST Cụm 933 — Thử lấy BI (1.0.3)
 
 ## Cài một lần trên mỗi máy Windows/Mac
 
@@ -56,3 +56,6 @@ Trạng thái nút: nền xanh đậm là đang chọn. Tiện ích kiểm tra h
 Bản 1.0.1 chỉ chạy với trang bi-test.html. Sau khi đối chiếu thành công mới phát hành bản kết nối trang chính để ghi Firebase.
 
 Bản 1.0.2: hiện tiến độ/lỗi liên tục trong cửa sổ tiện ích; biểu tượng có dấu … khi chạy, ! khi lỗi, OK khi xong; tự mở trang thử nếu chưa mở, tự tải lại một lần nếu tab có từ trước lúc cài tiện ích.
+
+Bản 1.0.3: sửa dò tên shop có/không có mã số, loại tab Ngành hàng BI khỏi kiểm tra bộ lọc; kiểm tra ô Chi tiết doanh thu qua trạng thái checkbox/dấu tích/nền ô màu xanh đậm. Dừng ở báo cáo đầu tiên bị lỗi và giữ tab BI.
+Nếu còn vướng: tại tab BI đang dừng, mở tiện ích → **Kiểm tra nút BI · tải tệp chẩn đoán** → gửi tệp `skst-bi-controls.json`. Tệp chỉ lấy cấu trúc các nút và tên shop liên quan, không lấy cookie, SSO hoặc bảng doanh thu.

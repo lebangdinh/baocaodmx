@@ -38,22 +38,31 @@ async function ticks() {
 // Required on the consolidated revenue page, including the employee tab.
 // Re-read the control after a click because BI can replace it during a render.
 function revenueDetailControl() {
-  return [...document.querySelectorAll('button,label')].find(e => vis(e) && txt(e).replace(/[✓✔☑]/g,'').trim() === 'Chi tiết doanh thu');
+  const labels=[...document.querySelectorAll('button,label,[role=checkbox],span,div')]
+    .filter(e=>vis(e)&&txt(e).replace(/[✓✔☑]/g,'').trim()==='Chi tiết doanh thu');
+  // Prefer an actual interactive ancestor over a text-only span.
+  for(const label of labels){const target=label.closest('button,label,[role=checkbox]');if(target)return target;}
+  return labels.sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]||null;
+}
+function blueSelected(element) {
+  if(!element)return false;
+  const rgb=getComputedStyle(element).backgroundColor.match(/rgba?\((\d+)[, ]+\s*(\d+)[, ]+\s*(\d+)/);
+  return !!rgb && Number(rgb[1])<100 && Number(rgb[2])>=40 && Number(rgb[2])<180 && Number(rgb[3])>=170;
 }
 function revenueDetailState(control) {
-  const input=control.querySelector('input[type=checkbox]');
+  const input=control.matches?.('input[type=checkbox]')?control:control.querySelector('input[type=checkbox]');
   if(input)return input.checked;
   const state=control.getAttribute('aria-checked')||control.getAttribute('aria-pressed')||control.getAttribute('data-state');
   if(['true','checked','on'].includes(state))return true;
   if(['false','unchecked','off'].includes(state))return false;
+  const children=[...control.querySelectorAll('span,div,svg')];
+  if(children.some(e=>/^[✓✔☑]$/.test(txt(e))||e.matches?.('svg.lucide-check,svg[data-lucide="check"]')))return true;
+  if(children.some(e=>blueSelected(e)&&txt(e).length<=1))return true;
   const indicator=control.firstElementChild;
-  if(!indicator)return null;
-  if(/[✓✔☑]/.test(txt(indicator)))return true;
-  if(indicator.querySelector('svg.lucide-check,svg[data-lucide="check"]'))return true;
-  // The supplied BI screenshot shows a separate empty square when unchecked.
-  if(txt(indicator)===''&&!indicator.querySelector('svg'))return false;
+  if(indicator&&txt(indicator)===''&&!indicator.querySelector('svg'))return false;
   return null;
 }
+
 async function ensureRevenueDetails() {
   let control=revenueDetailControl();
   if(!control)throw Error('Không thấy ô Chi tiết doanh thu trên BI.');
@@ -166,6 +175,7 @@ async function run(mode, progress) {
   if (!ready) return { ok: false, error: 'Không thấy bộ lọc BI (có thể chưa đăng nhập hoặc giao diện đã đổi).' };
   progress('Đang chọn bộ lọc…');
   if (!(await tab('Doanh thu'))) return { ok: false, error: 'Không thấy tab Doanh thu trên BI.' };
+  progress('Đang chọn '+(mode==='realtime'?'Realtime':'Lũy kế')+' trên Doanh thu hợp nhất…');
   await setPeriod(mode);
   await ticks();
   const ae = await area();
@@ -175,7 +185,8 @@ async function run(mode, progress) {
   for (const measure of ['thuc', 'qd']) {
     progress(measure === 'thuc' ? 'Đang tải DT thực…' : 'Đang tải DT quy đổi…');
     if (!(await clickMeasure(measure))) return { ok: false, error: 'Không thấy nút ' + (measure === 'qd' ? 'DT quy đổi' : 'DT thực') + '.' };
-    await ticks(); // bảo đảm đủ cột sau khi đổi loại
+    await ticks();
+    progress('Đang bật Chi tiết doanh thu và kiểm tra cột…');
     const r = await reloadAndCapture(measure);
     if (!r.ok) return r;
     got[measure] = r.text;
@@ -224,6 +235,7 @@ async function runEmpRev(mode, progress) {
   if (!ready) return { ok: false, error: 'Không thấy bộ lọc BI.' };
   progress('Đang chọn bộ lọc…');
   if (!(await tab('Nhân viên'))) return { ok: false, error: 'Không thấy tab Nhân viên trên BI.' };
+  progress('Đang chọn '+(mode==='realtime'?'Realtime':'Lũy kế')+' trên Doanh thu hợp nhất…');
   await setPeriod(mode);
   await ticks();
   const got = {};
@@ -236,6 +248,25 @@ async function runEmpRev(mode, progress) {
     got[measure] = r.text;
   }
   return { ok: true, text: got.qd, textThuc: got.thuc };
+}
+
+function matchesCompetitionStore(text,store){
+  const code=String(text).match(/^\s*(\d+)\s*[-–—]/)?.[1];
+  if(code)return code===store;
+  const name=String(text).replace(/\s+/g,' ').trim();
+  return store==='933'?/^TGD_DNA_HCH(?:\s*[-–—]|$)/i.test(name):/^AAR_DNA_HCH(?:\s*[-–—]|$)/i.test(name);
+}
+function findCompetitionStore(store){
+  const candidates=[...document.querySelectorAll('button,a,[role=button],td')].filter(e=>vis(e)&&matchesCompetitionStore(txt(e),store));
+  const controls=candidates.filter(e=>e.matches('button,a,[role=button]'));
+  return (controls.length?controls:candidates)[0]||null;
+}
+function inspectBiControls(){
+  const relevant=e=>/Chi tiết doanh thu|Lũy kế|Luỹ kế|Realtime|DT thực|DT quy đổi/.test(txt(e))&&txt(e).length<100;
+  const controls=[...document.querySelectorAll('button,label,[role=checkbox],span')].filter(e=>vis(e)&&relevant(e));
+  const stores=[...document.querySelectorAll('button,a,[role=button],td')].filter(e=>vis(e)&&['933','10341'].some(code=>matchesCompetitionStore(txt(e),code)));
+  const describe=e=>({tag:e.tagName,text:txt(e),className:e.getAttribute('class'),role:e.getAttribute('role'),ariaChecked:e.getAttribute('aria-checked'),ariaPressed:e.getAttribute('aria-pressed'),background:getComputedStyle(e).backgroundColor,html:e.outerHTML.slice(0,1800)});
+  return {ok:true,path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe)};
 }
 
 // Thi đua nhân viên của một siêu thị: lọc khu vực, Tải lại, bấm đúng tên siêu thị để vào danh sách nhân viên.
@@ -253,10 +284,10 @@ async function runEmpComp(mode, progress, store) {
   if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
   rb[0].click();
   await sleep(2500);
-  const btn = await waitFor(() => bs().filter((x) => new RegExp('^'+store+'\\s*[-–—]').test(btxt(x))), 60000);
-  if (!btn) return { ok: false, error: 'Không thấy siêu thị "' + store + '" trong bảng thi đua (kiểm tra bộ lọc Khu vực).' };
-  progress('Đang mở danh sách nhân viên…');
-  btn[0].click();
+  const target=await waitFor(()=>findCompetitionStore(store),15000);
+  if(!target)return {ok:false,error:'Không thấy tên shop '+store+' có thể bấm trong bảng thi đua. Mở Kiểm tra nút BI để gửi thông tin giao diện.'};
+  progress('Đang bấm tên shop '+store+' để mở thi đua nhân viên…');
+  target.click();
   let last = '', stable = 0;
   const end = Date.now() + 60000;
   while (Date.now() < end) {
@@ -274,6 +305,7 @@ async function runEmpComp(mode, progress, store) {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'bi-run') return;
   port.onMessage.addListener(async (m) => {
+    if(m.type==='bi-inspect'){port.postMessage(inspectBiControls());return;}
     if (m.type !== 'bi-run') return;
     try {
       const res = await runChecked(m, p => port.postMessage({progress:p}));
@@ -316,7 +348,7 @@ async function runChecked(m,progress){
   if(/login|signin|dang-nhap/i.test(location.pathname))throw Error('Đăng nhập BI bằng SSO trước khi chạy.');
   requestedStore=m.store;
   await waitFor(()=>bs().find(x=>m.job==='installment'?btxt(x)==='Xem':/Tải lại/i.test(btxt(x))),25000);
-  for(const button of bs().filter(x=>/^(Ngành hàng|Nhóm hàng)/.test(btxt(x)))){
+  for(const button of bs().filter(x=>/^(Ngành hàng|Nhóm hàng)/.test(btxt(x)) && btxt(x)!=='Ngành hàng BI')){
     if(!/Chọn\s*$/.test(btxt(button)))throw Error('BI còn bộ lọc ngành/nhóm hàng. Bỏ bộ lọc đó trước để lấy đủ báo cáo.');
   }
   const fn={revenue:run,compete:runCompete,empRev:runEmpRev,empComp:runEmpComp,installment:runInstallment}[m.job];
