@@ -23,10 +23,10 @@ async function collection(){
  const context=vm.createContext({chrome,URL,setInterval:()=>1,clearInterval(){},setTimeout(fn,ms){if(ms<2000)queueMicrotask(fn);return 1},clearTimeout(){},console});
  vm.runInContext(fs.readFileSync('extension/baocaodmx-bi/background.js','utf8'),context);
  await vm.runInContext("start({id:'batch',biTab:null,cancelled:false},'all')",context);
- assert.equal(calls.length,9);assert.equal(creates,1);assert.equal(navigations.length,6,'Reuse page across month/realtime instead of reloading each store');
+ assert.equal(calls.length,9);assert.equal(creates,1);assert.equal(navigations.length,5,'Reuse page across month/realtime instead of reloading each store');
  assert.equal(calls.filter(x=>x.job==='empComp').length,2);
  assert(calls.filter(x=>x.job!=='empComp').every(x=>x.store==='both'));
  assert.equal(commit.results.length,9);assert.equal(commit.results.filter(x=>x.job==='installment').length,1);assert.equal(commit.results.find(x=>x.job==='installment').mode,'month');
  assert.match(vm.runInContext('message',context),/Đã nhập và đồng bộ Firebase/);
 }
-(async()=>{await filters();await collection();console.log('PASS: select both shops with fresh controls; only employee competition splits stores; collect 9 reports using 6 navigations; automatic commit after full collection.');})().catch(e=>{console.error(e);process.exit(1)});
+(async()=>{await filters();await collection();console.log('PASS: select both shops with fresh controls; only employee competition splits stores; collect 9 reports using 5 navigations; automatic commit after full collection.');})().catch(e=>{console.error(e);process.exit(1)});

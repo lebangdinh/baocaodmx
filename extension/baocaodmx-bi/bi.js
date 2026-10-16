@@ -91,7 +91,7 @@ async function selectPair(label, otherLabel) {
   if(!isSelectedButton(current))current.click();
   // React can replace buttons after click. Always inspect the current document.
   const selected=await waitFor(()=>isSelectedButton(pairButton(label)) &&
-    !!pairButton(otherLabel) && !isSelectedButton(pairButton(otherLabel)),4000);
+    (!pairButton(otherLabel) || !isSelectedButton(pairButton(otherLabel))),4000);
   if(!selected)throw Error('Chưa xác minh được '+label+' đang chọn trên BI.');
   await sleep(400);
 }
@@ -276,6 +276,9 @@ function inspectBiControls(){
 }
 
 // Thi đua nhân viên của một siêu thị: lọc khu vực, Tải lại, bấm đúng tên siêu thị để vào danh sách nhân viên.
+function employeeCompetitionView(){
+ const text=pageText();return /HẠNG TRONG ST/i.test(text)&&!/HẠNG VÙNG/i.test(text);
+}
 async function runEmpComp(mode, progress, store) {
   if (/login|signin|dang-nhap/i.test(location.pathname)) return { ok: false, error: 'Chưa đăng nhập BI.' };
   const ready = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 25000);
@@ -290,10 +293,14 @@ async function runEmpComp(mode, progress, store) {
   if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
   rb[0].click();
   await sleep(2500);
-  const target=await waitFor(()=>findCompetitionStore(store),15000);
-  if(!target)return {ok:false,error:'Không thấy tên shop '+store+' có thể bấm trong bảng thi đua. Mở Kiểm tra nút BI để gửi thông tin giao diện.'};
-  progress('Đang bấm tên shop '+store+' để mở thi đua nhân viên…');
-  target.click();
+  // Once inside an employee report, changing the store filter and reloading
+  // switches that same drilldown to the next shop; no second store-name click.
+  if(!employeeCompetitionView()){
+    const target=await waitFor(()=>findCompetitionStore(store),15000);
+    if(!target)return {ok:false,error:'Không thấy tên shop '+store+' có thể bấm trong bảng thi đua. Mở Kiểm tra nút BI để gửi thông tin giao diện.'};
+    progress('Đang bấm tên shop '+store+' để mở thi đua nhân viên…');
+    target.click();
+  }else progress('Đã chuyển bộ lọc sang shop '+store+'; đang lấy thi đua nhân viên Lũy kế…');
   let last = '', stable = 0;
   const end = Date.now() + 60000;
   while (Date.now() < end) {

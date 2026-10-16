@@ -10,5 +10,7 @@ function setPair(a,b,selected){buttons=[a,b].map(name=>({innerText:name,offsetPa
  setPair('DT thực','DT quy đổi','DT thực');await vm.runInContext("clickMeasure('qd')",ctx);assert.equal(clicks,3);
  await vm.runInContext("clickMeasure('qd')",ctx);assert.equal(clicks,3);
  await vm.runInContext("clickMeasure('thuc')",ctx);assert.equal(clicks,4);
+ setPair('Lũy kế','Realtime','Lũy kế');buttons=buttons.slice(0,1);
+ await vm.runInContext("setPeriod('month')",ctx);assert.equal(clicks,4,'Employee drilldown may expose only the selected Lũy kế button');
  console.log('PASS BI selected buttons: period and measure pairs, no duplicate click, fresh state after React replacement.');
 })().catch(e=>{console.error(e);process.exit(1)});

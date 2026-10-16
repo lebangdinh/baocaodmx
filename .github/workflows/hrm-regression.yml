@@ -25,3 +25,4 @@ jobs:
       - run: node tests/bi-start-connection.cjs
       - run: node tests/bi-combined-collection.cjs
       - run: node tests/realtime-personnel.cjs
+      - run: node tests/bi-employee-store-switch.cjs

@@ -63,17 +63,17 @@ async function start(run,profile){
     if(!ready?.ok)throw Error(ready?.error||'Tải lại baocaodmx để nhận bản hỗ trợ tiện ích.');
     if(ready.protocol!==PROTOCOL)throw Error('Trang SKST còn bản cũ. Nhấn Ctrl+Shift+R trên baocaodmx rồi chạy lại.');
     const jobs=buildJobs(profile);
-    const results=[],errors=[];let onJob='',onUrl='';
+    const results=[],errors=[];let onUrl='';
     for(let i=0;i<jobs.length;i++){
       if(run.cancelled)throw Error('Đã dừng. Chưa nhập dữ liệu của lượt này.');
       const task=jobs[i],label=`${i+1}/${jobs.length} · ${LABELS[task.job]} · ${task.store==='both'?'933 + 10341':task.store} · ${task.mode==='month'?'Lũy kế':'Realtime'}`;
       await progress(label);
       try{
-        const navigate=!run.biTab||onUrl!==URLS[task.job]||task.job==='empComp'||onJob==='empComp';
+        const navigate=!run.biTab||onUrl!==URLS[task.job];
         if(!run.biTab){const t=await chrome.tabs.create({url:URLS[task.job],active:true});run.biTab=t.id;}
         else if(navigate)await chrome.tabs.update(run.biTab,{url:URLS[task.job],active:true});
         if(navigate){await sleep(500);await waitComplete(run.biTab);}
-        onUrl=URLS[task.job];onJob=task.job;
+        onUrl=URLS[task.job];
         const res=await callBi(run.biTab,{type:'bi-run',...task,month:ready.month},s=>{void progress(label+' — '+s);});
         if(!res?.ok)throw Error(res?.error||'Không lấy được dữ liệu.');
         results.push({...task,text:res.text,textThuc:res.textThuc});

@@ -1,9 +1,9 @@
-# SKST Cụm 933 — Lấy BI & tự nhập 1.1.0
+# SKST Cụm 933 — Lấy BI & tự nhập 1.1.1
 
 ## Cập nhật từ bản 1.0.x
 
 1. Giải nén ZIP mới, thay toàn bộ file trong thư mục baocaodmx-bi đã cài.
-2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.1.0**.
+2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.1.1**.
 3. Tại https://lebangdinh.github.io/baocaodmx/ nhấn Ctrl+Shift+R.
 
 ## Cài lần đầu (mỗi máy một lần)
@@ -44,9 +44,11 @@ Toàn bộ: 9 bảng; Lũy kế: 6 bảng; Realtime: 3 bảng. Hai loại doanh 
 ## Khi gặp lỗi thao tác trên BI
 
 Tiện ích dừng và giữ tab BI đang vướng. Tại tab đó, bấm **Kiểm tra nút BI · tải tệp chẩn đoán**, gửi skst-bi-controls.json. Tệp chỉ chứa cấu trúc nút và tên shop liên quan, không chứa bảng doanh thu, cookie hay SSO.
-Trang bi-test.html vẫn là chế độ đối chiếu, chưa ghi kết quả lấy thử; bản 1.1.0 mặc định chạy trên trang chính và tự nhập.
+Trang bi-test.html vẫn là chế độ đối chiếu, chưa ghi kết quả lấy thử; bản 1.1.1 mặc định chạy trên trang chính và tự nhập.
 
 ## Kiểm thử
 
 Đã kiểm tra bảng chung hai shop qua parser thật, giữ mapping nhân viên như dán tay, ghép hai loại doanh thu, lịch chạy 9/6/3 bảng, bộ lọc hai shop, chỉ mở riêng thi đua NV, tự nhập/Firebase thành công và bị từ chối, đổi tài khoản/ngày, chống lặp, cùng các kiểm thử nhân sự/KPI hiện có.
 Thao tác trên phiên BI có SSO vẫn cần kiểm chứng trên máy người dùng; không cam kết chạy dưới một phút.
+
+Bản 1.1.1: chấp nhận màn thi đua nhân viên chỉ còn nút Lũy kế đang chọn; sau shop đầu, bỏ tích shop cũ, tích shop còn lại và Tải lại ngay trên màn nhân viên. Không mở lại trang/không tìm nút tên shop lần thứ hai khi đã ở màn nhân viên.
