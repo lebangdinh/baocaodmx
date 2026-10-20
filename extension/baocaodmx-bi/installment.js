@@ -19,7 +19,12 @@ const SkstInstallment = (() => {
       return cells.length>=4 && /[A-Za-zÀ-ỹĐđ]/.test(cells[0]) && cells.slice(1).every(c=>/^-?[\d,.]+$/.test(c))
         ? [cells[0],cells.slice(1).join('\t')] : [line];
     });
-    const hi = lines.findIndex(x=>normalize(x)==='nhan vien');
+    // BI also has a "Nhân viên" display-level control above the breadcrumb.
+    // Only the table header is immediately followed by the revenue columns.
+    const hi = lines.findIndex((x,i)=>normalize(x)==='nhan vien' &&
+      /^dt tra gop(?: |$)/.test(normalize(lines[i+1]||'')) &&
+      /dt sieu thi/.test(normalize(lines.slice(i+1,i+4).join(' '))) &&
+      /ty trong tra cham/.test(normalize(lines.slice(i+1,i+4).join(' '))));
     if (hi<0) throw Error('Chưa có bảng nhân viên trả chậm.');
     const context = lines.slice(0,hi).join('\n');
     const matches = Object.values(storeNames).filter(s=>context.includes(s));

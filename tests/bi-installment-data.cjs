@@ -13,6 +13,16 @@ const fixtures={
 };
 function sample(store){const f=fixtures[store];return ['TGDD','Báo cáo trả chậm','10/2026','Lũy kế','Realtime','Tất cả vùng','Vùng Trung Bộ','Đà Nẵng',helper.storeNames[store]+' - 351 Nguyễn Hữu Thọ','Nhân viên','DT trả góp (triệu)','DT siêu thị (triệu)\tTỷ trọng trả chậm %\t'+f.providers.join('\t'),f.providers.map(()=>'DT\t%').join('\t'),...f.rows.flatMap(([name,values])=>[name,values.replace(/ /g,'\t')]),'1-2 / Tổng 2 dòng','50 / trang'].join('\n');}
 const captures=['933','10341'].map(s=>helper.parse(sample(s),s));
+// Actual UI regression: the display-level picker repeats the employee label
+// before the shop breadcrumb. It must not be mistaken for the table header.
+function withLevelPicker(text) {
+ return text.replace('Lũy kế\nRealtime','Cấp hiển thị:\nVùng\nKhu vực\nSiêu thị\nNhân viên\nXem\nLũy kế\nRealtime');
+}
+for(const store of ['933','10341']) {
+ assert.deepEqual(helper.parse(withLevelPicker(sample(store)),store),helper.parse(sample(store),store));
+ assert.throws(()=>helper.parse(withLevelPicker(sample(store)),store==='933'?'10341':'933'),/đúng shop/);
+}
+assert.throws(()=>helper.parse('10/2026\nCấp hiển thị:\nNhân viên\nXem\nTGD_DNA_HCH - 351 Nguyễn Hữu Thọ','933'),/Chưa có bảng/);
 assert.equal(helper.parse(sample('933').replace(/([^\n]+)\n(?=[\d,.]+\t)/g,'$1\t'),'933').rows.length,2);
 assert.throws(()=>helper.parse(sample('933'),'10341'),/đúng shop/);
 assert.throws(()=>helper.parse(sample('933').replace('Tổng 2 dòng','Tổng 3 dòng'),'933'),/đủ một trang/);
@@ -41,4 +51,4 @@ near(parsed.data.reduce((n,r)=>n+r['DT TRẢ GÓP (TRIỆU)'],0),350);
 const result=load('src/utils/biExtensionImport.ts').prepareBiImport([{job:'installment',store:'both',mode:'month',text}],'2026-10','month');
 assert.deepEqual(result.updates.tra_cham_luyke,parsed.data);
 console.log('PASS installment: provider order, shared employee totals, percentages, zero rows, rejected incomplete/foreign-month payloads, current parser and receiver.');
-module.exports={sample};
+module.exports={sample,withLevelPicker};

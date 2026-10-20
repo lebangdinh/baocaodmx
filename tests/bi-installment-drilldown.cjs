@@ -1,5 +1,5 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
-const {sample}=require('./bi-installment-data.cjs');
+const {sample,withLevelPicker}=require('./bi-installment-data.cjs');
 async function scenario(start='Vùng',extra=false){
  let state=start,store='933',actions=[],now=0;
  const labels=['TGD_DNA_HCH - 351 Nguyễn Hữu Thọ','AAR_DNA_HCH - 351 Nguyễn Hữu Thọ'];
@@ -19,7 +19,7 @@ async function scenario(start='Vùng',extra=false){
   if(state==='Nhân viên')controls.push(element('Đà Nẵng',()=>{state='Siêu thị';actions.push('back');}));
   return controls;
  };
- const raw=()=>state==='Nhân viên'?sample(store):[
+ const raw=()=>state==='Nhân viên'?withLevelPicker(sample(store)):[
   '10/2026','Siêu thị','Chọn','Lũy kế','Realtime',state,
   'DT trả góp (triệu)','DT siêu thị (triệu)\tTỷ trọng trả chậm %',
   ...(state==='Siêu thị'?labels.flatMap(label=>[label,'100\t200\t50']):[state==='Vùng'?'Vùng Trung Bộ':'Đà Nẵng','100\t200\t50']),

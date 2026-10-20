@@ -1,9 +1,9 @@
-# SKST Cụm 933 — Lấy BI & tự nhập 1.1.3
+# SKST Cụm 933 — Lấy BI & tự nhập 1.1.4
 
 ## Cập nhật từ bản 1.0.x
 
 1. Giải nén ZIP mới, thay toàn bộ file trong thư mục baocaodmx-bi đã cài.
-2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.1.3**.
+2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.1.4**.
 3. Tại https://lebangdinh.github.io/baocaodmx/ nhấn Ctrl+Shift+R.
 
 ## Cài lần đầu (mỗi máy một lần)
@@ -76,3 +76,12 @@ Bản 1.1.2 chờ cấu trúc thead/th/tbody/td. Bản này nhận cấp Vùng/K
 Đã chạy các hàm lấy dữ liệu thật trên giao diện mô phỏng chỉ có div (không có th/tbody/td), từ bảng Vùng, Khu vực và từ chi tiết nhân viên; xác nhận quay về Đà Nẵng và lấy shop còn lại. Đồng thời kiểm tra dữ liệu mẫu qua parser website. Đây vẫn là kiểm thử mô phỏng, chưa phải xác nhận chạy trên phiên SSO thật.
 
 Cập nhật lên 1.1.3: chép toàn bộ file vào đúng thư mục tiện ích đang cài → chrome://extensions → bấm ↻ → kiểm tra phiên bản 1.1.3. Tải lại tab BI và baocaodmx trước khi chạy. Nếu vẫn dừng, gửi dòng lỗi của tiện ích cùng tệp Kiểm tra nút BI mới để xác định chính xác bước vướng.
+
+
+## Bản 1.1.4 — Nhận đúng tiêu đề sau mục Cấp hiển thị
+
+BI thêm bộ chọn Cấp hiển thị có chữ Nhân viên phía trên đường dẫn shop. Bản 1.1.3 nhận nhầm chữ này là tiêu đề bảng, gây thông báo sai shop 933 dù đã mở đúng shop. Bản 1.1.4 chỉ nhận tiêu đề Nhân viên khi ngay sau nó là các cột DT trả góp, DT siêu thị và Tỷ trọng trả chậm. Vẫn kiểm tra shop thật ở đường dẫn và từ chối bảng của shop khác.
+
+Đã tái hiện thông báo lỗi cũ với bộ chọn cấp; kiểm tra hồi quy trên cả hai shop, đường đi lấy đủ hai bảng, parser hiện tại và kiểm tra từ chối sai shop. Chưa có phiên SSO thật để chạy trực tiếp.
+
+Cập nhật: chép đè toàn bộ file tiện ích → chrome://extensions bấm ↻ → xác nhận phiên bản 1.1.4 → tải lại tab BI và baocaodmx trước khi chạy.
