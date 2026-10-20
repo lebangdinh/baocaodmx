@@ -268,11 +268,12 @@ function findCompetitionStore(store){
   return (controls.length?controls:candidates)[0]||null;
 }
 function inspectBiControls(){
-  const relevant=e=>/Chi tiết doanh thu|Lũy kế|Luỹ kế|Realtime|DT thực|DT quy đổi/.test(txt(e))&&txt(e).length<100;
+  const relevant=e=>/Chi tiết doanh thu|Lũy kế|Luỹ kế|Realtime|DT thực|DT quy đổi|Tỷ trọng trả góp|^Xem$|^Tất cả vùng$|^Vùng Trung Bộ$|^Đà Nẵng$/.test(txt(e))&&txt(e).length<100;
   const controls=[...document.querySelectorAll('button,label,[role=checkbox],span')].filter(e=>vis(e)&&relevant(e));
   const stores=[...document.querySelectorAll('button,a,[role=button],td')].filter(e=>vis(e)&&['933','10341'].some(code=>matchesCompetitionStore(txt(e),code)));
   const describe=e=>({tag:e.tagName,text:txt(e),className:e.getAttribute('class'),role:e.getAttribute('role'),ariaChecked:e.getAttribute('aria-checked'),ariaPressed:e.getAttribute('aria-pressed'),background:getComputedStyle(e).backgroundColor,html:e.outerHTML.slice(0,1800)});
-  return {ok:true,path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe)};
+  const navigationControls=location.pathname==='/dashboard/tra-cham'?[...document.querySelectorAll('a,button,span,div,[role=button]')].filter(e=>vis(e)&&/^(Tất cả vùng|Vùng Trung Bộ|Đà Nẵng|Tỷ trọng trả góp|Xem)$/.test(txt(e))).slice(0,20).map(describe):[];
+  return {ok:true,path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe),navigationControls,installmentLevel:location.pathname==='/dashboard/tra-cham'?installmentHeading():null};
 }
 
 // Thi đua nhân viên của một siêu thị: lọc khu vực, Tải lại, bấm đúng tên siêu thị để vào danh sách nhân viên.
@@ -329,28 +330,95 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-async function runInstallment(mode, progress) {
-  if(mode!=='month')throw Error('Trả chậm Realtime đang lỗi trên BI; chỉ lấy Lũy kế.');
-  if(location.pathname!=='/dashboard/tra-cham')throw Error('Chưa ở đúng trang Báo cáo trả chậm.');
-  const installmentTab=await waitFor(()=>[...document.querySelectorAll('a,button,[role=tab]')].find(e=>vis(e)&&txt(e)==='Tỷ trọng trả góp'),15000);
-  if(!installmentTab)return {ok:false,error:'Không thấy tab Tỷ trọng trả góp.'};
-  installmentTab.click();
-  if(!await waitFor(()=>bs().find(x=>btxt(x)==='Xem'),25000))return {ok:false,error:'Không thấy nút Xem trên báo cáo trả chậm.'};
-  await setPeriod(mode);
-  const error=await area();if(error)return {ok:false,error};
-  progress('Đang lấy trả chậm Lũy kế — Tỷ trọng trả góp…');
-  bs().find(x=>btxt(x)==='Xem').click();
-  await sleep(2500);let last='',stable=0;
-  const end=Date.now()+90000;
-  while(Date.now()<end){
-    const t=pageText();
-    const busy=document.querySelector('[aria-busy=true],.animate-spin,[class*=spinner]');
-    if(!busy&&/DT SIÊU THỊ/i.test(t)&&/TỶ TRỌNG TRẢ CHẬM/i.test(t)&&/NHÂN VIÊN/i.test(t)){
-      stable=t===last?stable+1:0;if(stable>=6)return {ok:true,text:t};
-    }else stable=0;
-    last=t;await sleep(250);
+// Drilldown introduced by BI in October 2026. Never capture a region total
+// as employee data. Inspect the table level and each shop before proceeding.
+function installmentHeading(text=pageText()) {
+ // Read the clipboard header, not a presumed thead/th/tbody implementation.
+ // The filter also says "Siêu thị", so require the next revenue column.
+ const match=String(text).match(/(?:^|[\n\t])\s*(Vùng|Khu vực|Siêu thị|Nhân viên)\s*[\n\t]\s*DT trả góp/iu);
+ return match?['Vùng','Khu vực','Siêu thị','Nhân viên'].find(x=>x.toLowerCase()===match[1].toLowerCase())||'':'';
+}
+function installmentBusy() {
+ return [...document.querySelectorAll('[aria-busy=true],.animate-spin,[class*=spinner]')].some(vis);
+}
+async function installmentStable(level,store='') {
+ let last='',stable=0,result='',reason='';
+ const done=await waitFor(()=>{
+  const t=pageText();
+  const current=installmentHeading(t);
+  if(installmentBusy()||current!==level){reason='Đang thấy cấp '+(current||'chưa nhận diện')+'; cần '+level;stable=0;return false;}
+  if(!/Tỷ trọng trả chậm/i.test(t)||!/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i.test(t)){reason='Chưa thấy số dòng của bảng';stable=0;return false;}
+  if(!isSelectedButton(pairButton('Lũy kế')))throw Error('Trả chậm không còn ở Lũy kế.');
+  if(store){
+   try{SkstInstallment.parse(t,store);}catch(e){reason=e.message;stable=0;return false;}
   }
-  return {ok:false,error:'Không đọc được bảng trả chậm. Dữ liệu cũ được giữ nguyên.'};
+  stable=t===last?stable+1:0;last=t;result=t;
+  return stable>=6;
+ },45000,250);
+ if(!done)throw Error('Chưa xác minh được bảng trả chậm '+(store||level)+': '+reason+'. Giữ tab BI để kiểm tra.');
+ return result;
+}
+function installmentCell(label) {
+ // Click the smallest visible element with this exact label. This works for
+ // links, buttons, a span inside a clickable cell, and div/role-based tables.
+ return [...document.querySelectorAll('a,button,span,div,td,[role=button],[role=cell]')]
+  .filter(e=>vis(e)&&txt(e)===label)
+  .sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]||null;
+}
+function installmentShopLabels() {
+ const text=pageText(),header=text.search(/(?:^|[\n\t])\s*Siêu thị\s*[\n\t]\s*DT trả góp/iu);
+ if(header<0)return [];
+ const body=text.slice(header).split(/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i)[0];
+ return body.split(/[\n\t]/).map(s=>s.trim()).filter(s=>/^(?:\d+\s*[-–—]\s*)?[A-Z]+_[A-Z]+_[A-Z]+\s*[-–—]\s*\S/.test(s));
+}
+async function installmentOpen(label,level,store='') {
+ const control=await waitFor(()=>installmentCell(label),10000);
+ if(!control)throw Error('Không thấy dòng '+label+' trong báo cáo trả chậm.');
+ control.click();
+ await sleep(500);
+ return installmentStable(level,store);
+}
+async function runInstallment(mode, progress) {
+ if(mode!=='month')throw Error('Chỉ lấy trả chậm Lũy kế.');
+ if(location.pathname!=='/dashboard/tra-cham')throw Error('Chưa ở đúng trang Báo cáo trả chậm.');
+ const installmentTab=await waitFor(()=>[...document.querySelectorAll('a,button,[role=tab]')].find(e=>vis(e)&&txt(e)==='Tỷ trọng trả góp'),15000);
+ if(!installmentTab)throw Error('Không thấy tab Tỷ trọng trả góp.');
+ installmentTab.click();
+ const view=await waitFor(()=>bs().find(x=>btxt(x)==='Xem'),25000);
+ if(!view)throw Error('Không thấy nút Xem trên báo cáo trả chậm.');
+ await setPeriod(mode);
+ // Keep the existing shop filter unchanged. The drilldown must visibly contain
+ // exactly the two managed shops; otherwise stop instead of importing a subset.
+ view.click();await sleep(1000);
+ let level=await waitFor(()=>installmentHeading(),15000);
+ if(level==='Nhân viên'||level==='Siêu thị'||level==='Khu vực'){
+  const root=installmentCell('Tất cả vùng');
+  if(!root)throw Error('Không thấy đường dẫn Tất cả vùng để mở lại trả chậm.');
+  root.click();await sleep(500);
+ }
+ progress('Trả chậm Lũy kế: đang mở Vùng Trung Bộ…');
+ await installmentStable('Vùng');
+ await installmentOpen('Vùng Trung Bộ','Khu vực');
+ progress('Trả chậm Lũy kế: đang mở Đà Nẵng…');
+ await installmentOpen('Đà Nẵng','Siêu thị');
+ const labels=installmentShopLabels();
+ const names=SkstInstallment.storeNames;
+ for(const store of ['933','10341'])if(labels.filter(l=>l.startsWith(names[store]+' - ')).length!==1)throw Error('Chưa thấy đúng hai shop 933 và 10341 trên trả chậm.');
+ if(labels.length!==2)throw Error('Trả chậm đang có ngoài hai shop; kiểm tra lại bộ lọc.');
+ const captures=[];
+ for(const store of ['933','10341']){
+  progress('Đang lấy trả chậm Lũy kế shop '+store+'…');
+  const label=installmentShopLabels().find(l=>l.startsWith(names[store]+' - '));
+  const text=await installmentOpen(label,'Nhân viên',store);
+  captures.push(SkstInstallment.parse(text,store));
+  if(store==='933'){
+   const back=installmentCell('Đà Nẵng');
+   if(!back)throw Error('Không thấy đường dẫn Đà Nẵng để quay lại lấy shop thứ hai.');
+   back.click();await sleep(500);await installmentStable('Siêu thị');
+  }
+ }
+ progress('Đã lấy đủ hai shop; đang ghép trả chậm theo tên đối tác…');
+ return {ok:true,text:SkstInstallment.combine(captures)};
 }
 function reportMonth(text){
   const match=String(text).match(/(?:^|\n)\s*(0?[1-9]|1[0-2])\s*\/\s*(20\d{2})\s*(?:\n|$)/);

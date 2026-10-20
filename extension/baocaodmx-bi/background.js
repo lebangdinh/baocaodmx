@@ -29,7 +29,7 @@ async function callBi(id,request,progress){
     try{return await new Promise((resolve,reject)=>{
       const port=chrome.tabs.connect(id,{name:'bi-run'});let settled=false,connected=false;
       const finish=(err,value)=>{if(settled)return;settled=true;clearTimeout(timer);port.disconnect();err?reject(err):resolve(value);};
-      const timer=setTimeout(()=>finish(Error('BI quá thời gian chờ (180 giây).')),180000);
+      const timer=setTimeout(()=>finish(Error('BI quá thời gian chờ lấy dữ liệu.')),request.job==='installment'?420000:180000);
       port.onMessage.addListener(m=>{connected=true;if(m.progress)progress(m.progress);else finish(null,m);});
       port.onDisconnect.addListener(()=>{const error=Error(connected?'Mất kết nối BI trong lúc lấy dữ liệu.':'not-ready');finish(error);});
       port.postMessage(request);
