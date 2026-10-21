@@ -12,54 +12,73 @@ const SkstInstallment = (() => {
     if (!Number.isFinite(n)) throw Error('Số liệu trả chậm không hợp lệ.');
     return n;
   }
+  const core=['DT trả góp (triệu)','DT siêu thị (triệu)','Tỷ trọng trả chậm %'];
+  const canonical=s=>typeof SkstRecognition!=='undefined'?SkstRecognition.canonical(s):String(s).trim();
+  function column(s){
+    s=canonical(s);const n=normalize(s);
+    const c=core.findIndex(k=>normalize(k)===n);if(c>=0)return {kind:'core',index:c};
+    const matches=sources.map((a,i)=>normalize(a)===n||aliases[i]===n?i:-1).filter(i=>i>=0);
+    return matches.length===1?{kind:'partner',index:matches[0]}:null;
+  }
+  function linesOf(text){
+    return String(text).split(/\r?\n/).map(x=>x.trim()).filter(Boolean).flatMap(line=>{
+      const cells=line.split('\t');
+      if(cells.length>=4&&/[A-Za-zÀ-ỹĐđ]/.test(cells[0])&&cells.slice(1).every(c=>/^-?[\d,.]+$/.test(c)))return [cells[0],cells.slice(1).join('\t')];
+      if(cells.length>1&&['Vùng','Khu vực','Siêu thị','Nhân viên'].includes(canonical(cells[0]))&&column(cells[1]))return [cells[0],cells.slice(1).join('\t')];
+      return [line];
+    });
+  }
+  function heading(text){
+    const lines=linesOf(text);
+    const index=lines.findIndex((x,i)=>['Vùng','Khu vực','Siêu thị','Nhân viên'].includes(canonical(x))&&column((lines[i+1]||'').split('\t')[0]));
+    return {level:index<0?'':canonical(lines[index]),index,lines};
+  }
   function parse(text, store) {
     if (!storeNames[store]) throw Error('Shop trả chậm không hợp lệ.');
-    const lines = String(text).split(/\r?\n/).map(x=>x.trim()).filter(Boolean).flatMap(line=>{
-      const cells=line.split('\t');
-      return cells.length>=4 && /[A-Za-zÀ-ỹĐđ]/.test(cells[0]) && cells.slice(1).every(c=>/^-?[\d,.]+$/.test(c))
-        ? [cells[0],cells.slice(1).join('\t')] : [line];
-    });
-    // BI also has a "Nhân viên" display-level control above the breadcrumb.
-    // Only the table header is immediately followed by the revenue columns.
-    const hi = lines.findIndex((x,i)=>normalize(x)==='nhan vien' &&
-      /^dt tra gop(?: |$)/.test(normalize(lines[i+1]||'')) &&
-      /dt sieu thi/.test(normalize(lines.slice(i+1,i+4).join(' '))) &&
-      /ty trong tra cham/.test(normalize(lines.slice(i+1,i+4).join(' '))));
-    if (hi<0) throw Error('Chưa có bảng nhân viên trả chậm.');
-    const context = lines.slice(0,hi).join('\n');
-    const matches = Object.values(storeNames).filter(s=>context.includes(s));
-    if (matches.length!==1 || matches[0]!==storeNames[store]) throw Error('Bảng trả chậm không đúng shop '+store+'.');
-    const month = lines.find(x=>/^(0?[1-9]|1[0-2])\/20\d{2}$/.test(x));
-    if (!month) throw Error('Thiếu tháng trả chậm.');
-    const footer = lines.findIndex((x,i)=>i>hi&&/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i.test(x));
-    if (footer<0) throw Error('Không xác minh được tổng số dòng trả chậm.');
-    const count = lines[footer].match(/(\d+)\s*[-–]\s*(\d+)\s*\/\s*Tổng\s+(\d+)\s+dòng/i).slice(1).map(Number);
-    if (count[0]!==1 || count[1]!==count[2] || !count[2]) throw Error('Bảng trả chậm chưa đủ một trang; chưa nhập.');
-    const firstData = lines.findIndex((x,i)=>i>hi&&i<footer&&/^[-\d,.]+(?:\t[-\d,.]+){2,}$/.test(x));
-    if (firstData<0) throw Error('Bảng trả chậm chưa có số liệu.');
-    const header = lines.slice(hi+1,firstData-1).join('\t');
-    const parts = header.split(/\t+/).map(x=>x.trim()).filter(Boolean);
-    const order = [];
-    for (const part of parts) {
-      const n=normalize(part);
-      if (/^(dt tra gop|dt sieu thi|ty trong tra cham)/.test(n) || n==='dt' || n==='%') continue;
-      const index=aliases.findIndex(a=>n.includes(a));
-      if (index<0 || order.includes(index)) throw Error('Cột đối tác trả chậm đã đổi: '+part);
-      order.push(index);
+    const {lines,index:hi,level}=heading(text);
+    if(hi<0||level!=='Nhân viên')throw Error('Chưa có bảng nhân viên trả chậm.');
+    const context=lines.slice(0,hi).join('\n');
+    const matches=Object.values(storeNames).filter(s=>context.includes(s));
+    if(matches.length!==1||matches[0]!==storeNames[store])throw Error('Bảng trả chậm không đúng shop '+store+'.');
+    const months=[...new Set(lines.filter(x=>/^(0?[1-9]|1[0-2])\/20\d{2}$/.test(x)).map(x=>x.padStart(7,'0')))];
+    if(months.length!==1)throw Error('Thiếu tháng trả chậm hoặc có nhiều tháng khác nhau.');
+    const month=months[0];
+    const footer=lines.findIndex((x,i)=>i>hi&&/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i.test(x));
+    if(footer<0)throw Error('Không xác minh được tổng số dòng trả chậm.');
+    const count=lines[footer].match(/(\d+)\s*[-–]\s*(\d+)\s*\/\s*Tổng\s+(\d+)\s+dòng/i).slice(1).map(Number);
+    if(count[0]!==1||count[1]!==count[2]||!count[2])throw Error('Bảng trả chậm chưa đủ một trang; chưa nhập.');
+    const firstData=lines.findIndex((x,i)=>i>hi&&i<footer&&/^[-\d,.]+(?:\t[-\d,.]+){2,}$/.test(x));
+    if(firstData<0)throw Error('Bảng trả chậm chưa có số liệu.');
+    const parts=lines.slice(hi+1,firstData-1).join('\t').split(/\t+/).map(x=>x.trim()).filter(Boolean);
+    const columns=[],seenColumns=new Set(),sub=[];
+    for(const part of parts){
+      if(['dt','%'].includes(normalize(part))){sub.push(normalize(part));continue;}
+      if(sub.length)throw Error('Cấu trúc tiêu đề trả chậm đã đổi.');
+      const c=column(part);
+      if(!c)throw Error('Cột đối tác trả chậm đã đổi: '+part);
+      const key=c.kind+c.index;if(seenColumns.has(key))throw Error('Trùng cột trả chậm: '+part);seenColumns.add(key);
+      columns.push(c);
     }
-    if (!order.length) throw Error('Không thấy cột đối tác trả chậm.');
-    const rows=[], seen=new Set();
-    for (let i=firstData-1;i<footer;i+=2) {
-      const name=lines[i], cells=(lines[i+1]||'').split('\t');
-      if (!/[A-Za-zÀ-ỹĐđ]/.test(name) || cells.length!==3+2*order.length) throw Error('Thiếu hoặc lệch cột trả chậm: '+name);
-      const key=normalize(name);
-      if (seen.has(key)) throw Error('Trùng nhân viên trong một shop: '+name);
-      seen.add(key);
-      const values=cells.map(number), partner=Array(sources.length).fill(0);
-      order.forEach((source,j)=>partner[source]=values[3+2*j]);
-      rows.push({name,credit:values[0],revenue:values[1],partner});
+    if(!core.every((_,i)=>seenColumns.has('core'+i)))throw Error('Thiếu cột doanh thu hoặc tỷ trọng trả chậm.');
+    const partners=columns.filter(c=>c.kind==='partner');
+    if(!partners.length)throw Error('Không thấy cột đối tác trả chậm.');
+    if(sub.length!==partners.length*2)throw Error('Thiếu cột con DT / % của đối tác trả chậm.');
+    let offset=0,pair=0;
+    for(const c of columns){c.offset=offset;if(c.kind==='partner'){
+      const labels=sub.slice(pair*2,pair*2+2);if(!labels.includes('dt')||!labels.includes('%'))throw Error('Lệch cột con DT / % trả chậm.');
+      c.amountOffset=offset+labels.indexOf('dt');offset+=2;pair++;
+    }else offset++;}
+    const rows=[],seen=new Set();
+    for(let i=firstData-1;i<footer;i+=2){
+      const name=lines[i],cells=(lines[i+1]||'').split('\t');
+      if(!/[A-Za-zÀ-ỹĐđ]/.test(name)||cells.length!==offset)throw Error('Thiếu hoặc lệch cột trả chậm: '+name);
+      const key=normalize(name);if(seen.has(key))throw Error('Trùng nhân viên trong một shop: '+name);seen.add(key);
+      const values=cells.map(number),partner=Array(sources.length).fill(0),base=[];
+      for(const c of columns)if(c.kind==='core')base[c.index]=values[c.offset];else partner[c.index]=values[c.amountOffset];
+      if(Math.abs(partner.reduce((a,b)=>a+b,0)-base[0])>0.02*(partners.length+1))throw Error('Tổng doanh thu đối tác không khớp DT trả góp: '+name);
+      rows.push({name,credit:base[0],revenue:base[1],partner});
     }
-    if (rows.length!==count[2]) throw Error('Thiếu dòng trả chậm shop '+store+'.');
+    if(rows.length!==count[2])throw Error('Thiếu dòng trả chậm shop '+store+'.');
     return {store,month,rows};
   }
   function combine(captures) {
@@ -84,6 +103,6 @@ const SkstInstallment = (() => {
     lines.push('1-'+map.size+' / Tổng '+map.size+' dòng');
     return lines.join('\n');
   }
-  return {parse,combine,normalize,storeNames};
+  return {parse,combine,normalize,storeNames,heading};
 })();
 if (typeof module!=='undefined') module.exports=SkstInstallment;

@@ -8,6 +8,7 @@ async function state(){
     const r=await chrome.runtime.sendMessage({type:'status'});
     if(!r)throw Error('Không nhận được phản hồi từ tiện ích. Mở chrome://extensions rồi tải lại tiện ích.');
     status.textContent=r.message;run.disabled=!!r.running;
+    document.getElementById('recognition').textContent=r.recognition||'';
   }catch(e){status.textContent='Lỗi kết nối tiện ích: '+e.message;run.disabled=false;}
   finally{refreshing=false;}
 }

@@ -15,13 +15,14 @@ async function waitFor(fn, ms = 15000, step = 200) {
 const byText = (sel, re) => [...document.querySelectorAll(sel)].filter((e) => vis(e) && re.test(txt(e)));
 const click = (el) => el.click();
 
-const bs = () => [...document.querySelectorAll('button')].filter((e) => !!e.offsetParent);
-const btxt = (e) => (e.innerText || '').trim();
+const bs = () => [...new Set([...document.querySelectorAll('button'),...document.querySelectorAll('[role=button],[role=tab]')])].filter((e) => !!e.offsetParent);
+const canonicalLabel=s=>typeof SkstRecognition!=='undefined'?SkstRecognition.canonical(s):String(s).trim();
+const btxt = (e) => canonicalLabel((e.innerText || e.textContent || '').trim());
 
 async function tab(name) {
   const b = bs().find((x) => btxt(x) === name && true);
   if (!b) return false;
-  if (!/bg-blue-600/.test(b.className)) { b.click(); await sleep(800); }
+  if (!isSelectedButton(b)) { b.click(); await sleep(800); }
   return true;
 }
 
@@ -38,7 +39,7 @@ async function ticks() {
 // Re-read the control after a click because BI can replace it during a render.
 function revenueDetailControl() {
   const labels=[...document.querySelectorAll('button,label,[role=checkbox],span,div')]
-    .filter(e=>vis(e)&&txt(e).replace(/[✓✔☑]/g,'').trim()==='Chi tiết doanh thu');
+    .filter(e=>vis(e)&&canonicalLabel(txt(e).replace(/[✓✔☑]/g,'').trim())==='Chi tiết doanh thu');
   // Prefer an actual interactive ancestor over a text-only span.
   for(const label of labels){const target=label.closest('button,label,[role=checkbox]');if(target)return target;}
   return labels.sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]||null;
@@ -207,7 +208,7 @@ async function runCompete(mode, progress) {
   progress('Đang chọn bộ lọc…');
   await setPeriod(mode);
   const dl = bs().find((x) => btxt(x) === 'Danh sách');
-  if (dl && !/bg-blue-600/.test(dl.className)) { dl.click(); await sleep(500); }
+  if (dl && !isSelectedButton(dl)) { dl.click(); await sleep(500); }
   const ae = await area();
   if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
   const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
@@ -273,7 +274,7 @@ function inspectBiControls(){
   const stores=[...document.querySelectorAll('button,a,[role=button],td')].filter(e=>vis(e)&&['933','10341'].some(code=>matchesCompetitionStore(txt(e),code)));
   const describe=e=>({tag:e.tagName,text:txt(e),className:e.getAttribute('class'),role:e.getAttribute('role'),ariaChecked:e.getAttribute('aria-checked'),ariaPressed:e.getAttribute('aria-pressed'),background:getComputedStyle(e).backgroundColor,html:e.outerHTML.slice(0,1800)});
   const navigationControls=location.pathname==='/dashboard/tra-cham'?[...document.querySelectorAll('a,button,span,div,[role=button]')].filter(e=>vis(e)&&/^(Tất cả vùng|Vùng Trung Bộ|Đà Nẵng|Tỷ trọng trả góp|Xem)$/.test(txt(e))).slice(0,20).map(describe):[];
-  return {ok:true,path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe),navigationControls,installmentLevel:location.pathname==='/dashboard/tra-cham'?installmentHeading():null};
+  return {ok:true,extensionVersion:chrome.runtime.getManifest?.().version,recognitionRevision:typeof SkstRecognition!=='undefined'?SkstRecognition.current.revision:null,sourceHints:biSourceHints(),path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe),navigationControls,installmentLevel:location.pathname==='/dashboard/tra-cham'?installmentHeading():null};
 }
 
 // Thi đua nhân viên của một siêu thị: lọc khu vực, Tải lại, bấm đúng tên siêu thị để vào danh sách nhân viên.
@@ -287,7 +288,7 @@ async function runEmpComp(mode, progress, store) {
   progress('Đang chọn bộ lọc…');
   await setPeriod(mode);
   const dl = bs().find((x) => btxt(x) === 'Danh sách');
-  if (dl && !/bg-blue-600/.test(dl.className)) { dl.click(); await sleep(500); }
+  if (dl && !isSelectedButton(dl)) { dl.click(); await sleep(500); }
   const ae = await area();
   if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
   const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
@@ -333,10 +334,7 @@ chrome.runtime.onConnect.addListener((port) => {
 // Drilldown introduced by BI in October 2026. Never capture a region total
 // as employee data. Inspect the table level and each shop before proceeding.
 function installmentHeading(text=pageText()) {
- // Read the clipboard header, not a presumed thead/th/tbody implementation.
- // The filter also says "Siêu thị", so require the next revenue column.
- const match=String(text).match(/(?:^|[\n\t])\s*(Vùng|Khu vực|Siêu thị|Nhân viên)\s*[\n\t]\s*DT trả góp/iu);
- return match?['Vùng','Khu vực','Siêu thị','Nhân viên'].find(x=>x.toLowerCase()===match[1].toLowerCase())||'':'';
+ return SkstInstallment.heading(text).level;
 }
 function installmentBusy() {
  return [...document.querySelectorAll('[aria-busy=true],.animate-spin,[class*=spinner]')].some(vis);
@@ -346,8 +344,8 @@ async function installmentStable(level,store='') {
  const done=await waitFor(()=>{
   const t=pageText();
   const current=installmentHeading(t);
-  if(installmentBusy()||current!==level){reason='Đang thấy cấp '+(current||'chưa nhận diện')+'; cần '+level;stable=0;return false;}
-  if(!/Tỷ trọng trả chậm/i.test(t)||!/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i.test(t)){reason='Chưa thấy số dòng của bảng';stable=0;return false;}
+  if(installmentBusy()||!(Array.isArray(level)?level:[level]).includes(current)){reason='Đang thấy cấp '+(current||'chưa nhận diện')+'; cần '+level;stable=0;return false;}
+  if(!/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i.test(t)){reason='Chưa thấy số dòng của bảng';stable=0;return false;}
   if(!isSelectedButton(pairButton('Lũy kế')))throw Error('Trả chậm không còn ở Lũy kế.');
   if(store){
    try{SkstInstallment.parse(t,store);}catch(e){reason=e.message;stable=0;return false;}
@@ -359,16 +357,17 @@ async function installmentStable(level,store='') {
  return result;
 }
 function installmentCell(label) {
- // Click the smallest visible element with this exact label. This works for
- // links, buttons, a span inside a clickable cell, and div/role-based tables.
- return [...document.querySelectorAll('a,button,span,div,td,[role=button],[role=cell]')]
-  .filter(e=>vis(e)&&txt(e)===label)
-  .sort((a,b)=>a.querySelectorAll('*').length-b.querySelectorAll('*').length)[0]||null;
+ const matches=[...document.querySelectorAll('a,button,span,div,td,[role=button],[role=cell]')]
+  .filter(e=>vis(e)&&canonicalLabel(txt(e))===canonicalLabel(label));
+ // Nested text and its clickable parent are one control; separate matches are ambiguous.
+ const leaves=matches.filter(e=>!matches.some(child=>child!==e&&e.contains?.(child)));
+ if(leaves.length>1)throw Error('Có nhiều nút '+label+'; chưa xác định được nút đúng.');
+ return leaves[0]||null;
 }
 function installmentShopLabels() {
- const text=pageText(),header=text.search(/(?:^|[\n\t])\s*Siêu thị\s*[\n\t]\s*DT trả góp/iu);
- if(header<0)return [];
- const body=text.slice(header).split(/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i)[0];
+ const {level,index,lines}=SkstInstallment.heading(pageText());
+ if(level!=='Siêu thị')return [];
+ const body=lines.slice(index+1).join('\n').split(/\d+\s*[-–]\s*\d+\s*\/\s*Tổng\s+\d+\s+dòng/i)[0];
  return body.split(/[\n\t]/).map(s=>s.trim()).filter(s=>/^(?:\d+\s*[-–—]\s*)?[A-Z]+_[A-Z]+_[A-Z]+\s*[-–—]\s*\S/.test(s));
 }
 async function installmentOpen(label,level,store='') {
@@ -378,10 +377,30 @@ async function installmentOpen(label,level,store='') {
  await sleep(500);
  return installmentStable(level,store);
 }
+async function installmentReachShops(progress){
+ const levels=['Vùng','Khu vực','Siêu thị','Nhân viên'];
+ let level=await waitFor(()=>installmentHeading(),15000);
+ if(level==='Nhân viên'){
+  const back=installmentCell('Đà Nẵng')||installmentCell('Tất cả vùng');
+  if(!back)throw Error('Không thấy đường dẫn quay lại danh sách shop.');
+  back.click();await sleep(500);
+  await installmentStable(['Vùng','Khu vực','Siêu thị']);level=installmentHeading();
+ }
+ for(let step=0;step<3;step++){
+  await installmentStable(level);
+  if(level==='Siêu thị')return;
+  const label=level==='Vùng'?'Vùng Trung Bộ':level==='Khu vực'?'Đà Nẵng':null;
+  if(!label)throw Error('Cấp báo cáo mới chưa được hỗ trợ; chưa nhập dữ liệu.');
+  progress('Trả chậm Lũy kế: đang mở '+label+'…');
+  await installmentOpen(label,level==='Vùng'?['Khu vực','Siêu thị']:['Siêu thị']);
+  const next=installmentHeading();if(levels.indexOf(next)<=levels.indexOf(level))throw Error('BI chưa chuyển đúng cấp báo cáo.');level=next;
+ }
+ throw Error('Chưa mở được danh sách shop trả chậm.');
+}
 async function runInstallment(mode, progress) {
  if(mode!=='month')throw Error('Chỉ lấy trả chậm Lũy kế.');
  if(location.pathname!=='/dashboard/tra-cham')throw Error('Chưa ở đúng trang Báo cáo trả chậm.');
- const installmentTab=await waitFor(()=>[...document.querySelectorAll('a,button,[role=tab]')].find(e=>vis(e)&&txt(e)==='Tỷ trọng trả góp'),15000);
+ const installmentTab=await waitFor(()=>[...document.querySelectorAll('a,button,[role=tab]')].find(e=>vis(e)&&canonicalLabel(txt(e))==='Tỷ trọng trả góp'),15000);
  if(!installmentTab)throw Error('Không thấy tab Tỷ trọng trả góp.');
  installmentTab.click();
  const view=await waitFor(()=>bs().find(x=>btxt(x)==='Xem'),25000);
@@ -390,31 +409,20 @@ async function runInstallment(mode, progress) {
  // Keep the existing shop filter unchanged. The drilldown must visibly contain
  // exactly the two managed shops; otherwise stop instead of importing a subset.
  view.click();await sleep(1000);
- let level=await waitFor(()=>installmentHeading(),15000);
- if(level==='Nhân viên'||level==='Siêu thị'||level==='Khu vực'){
-  const root=installmentCell('Tất cả vùng');
-  if(!root)throw Error('Không thấy đường dẫn Tất cả vùng để mở lại trả chậm.');
-  root.click();await sleep(500);
- }
- progress('Trả chậm Lũy kế: đang mở Vùng Trung Bộ…');
- await installmentStable('Vùng');
- await installmentOpen('Vùng Trung Bộ','Khu vực');
- progress('Trả chậm Lũy kế: đang mở Đà Nẵng…');
- await installmentOpen('Đà Nẵng','Siêu thị');
+ await installmentReachShops(progress);
  const labels=installmentShopLabels();
- const names=SkstInstallment.storeNames;
- for(const store of ['933','10341'])if(labels.filter(l=>l.startsWith(names[store]+' - ')).length!==1)throw Error('Chưa thấy đúng hai shop 933 và 10341 trên trả chậm.');
+ for(const store of ['933','10341'])if(labels.filter(l=>matchesCompetitionStore(l,store)).length!==1)throw Error('Chưa thấy đúng hai shop 933 và 10341 trên trả chậm.');
  if(labels.length!==2)throw Error('Trả chậm đang có ngoài hai shop; kiểm tra lại bộ lọc.');
  const captures=[];
  for(const store of ['933','10341']){
   progress('Đang lấy trả chậm Lũy kế shop '+store+'…');
-  const label=installmentShopLabels().find(l=>l.startsWith(names[store]+' - '));
+  const currentLabels=installmentShopLabels();
+  if(currentLabels.length!==2||!['933','10341'].every(code=>currentLabels.filter(l=>matchesCompetitionStore(l,code)).length===1))throw Error('Danh sách shop đã thay đổi; chưa nhập.');
+  const label=currentLabels.find(l=>matchesCompetitionStore(l,store));
   const text=await installmentOpen(label,'Nhân viên',store);
   captures.push(SkstInstallment.parse(text,store));
   if(store==='933'){
-   const back=installmentCell('Đà Nẵng');
-   if(!back)throw Error('Không thấy đường dẫn Đà Nẵng để quay lại lấy shop thứ hai.');
-   back.click();await sleep(500);await installmentStable('Siêu thị');
+   await installmentReachShops(progress);
   }
  }
  progress('Đã lấy đủ hai shop; đang ghép trả chậm theo tên đối tác…');
@@ -427,6 +435,7 @@ function reportMonth(text){
 async function runChecked(m,progress){
   if(!(m.job==='empComp'?['933','10341'].includes(m.store):m.store==='both')||!['month','realtime'].includes(m.mode))throw Error('Yêu cầu không hợp lệ.');
   if(/login|signin|dang-nhap/i.test(location.pathname))throw Error('Đăng nhập BI bằng SSO trước khi chạy.');
+  if(typeof SkstRecognition!=='undefined')SkstRecognition.use(m.recognition);
   requestedStore=m.store;requestedPeriod=m.mode;
   await waitFor(()=>bs().find(x=>m.job==='installment'?btxt(x)==='Xem':/Tải lại/i.test(btxt(x))),25000);
   for(const button of bs().filter(x=>/^(Ngành hàng|Nhóm hàng)/.test(btxt(x)) && btxt(x)!=='Ngành hàng BI')){
@@ -443,4 +452,13 @@ async function runChecked(m,progress){
   const next=document.querySelector('.ant-pagination-next');
   if(next&&!next.classList.contains('ant-pagination-disabled')&&next.getAttribute('aria-disabled')!=='true')throw Error('Bảng còn trang tiếp theo; chưa nhập để tránh thiếu dữ liệu.');
   return result;
+}
+
+function biSourceHints(){
+ if(typeof performance==='undefined')return [];
+ return [...new Set(performance.getEntriesByType('resource').filter(e=>['fetch','xmlhttprequest'].includes(e.initiatorType)).map(e=>{
+  try{const u=new URL(e.name);if(u.origin!==location.origin||!/\/api(?:\/|$)/i.test(u.pathname)||/auth|login|token|session|user|employee/i.test(u.pathname))return null;
+   return u.pathname.split('/').map(s=>/^[a-z-]{1,60}$/i.test(s)?s:':value').join('/');
+  }catch{return null;}
+ }).filter(Boolean))].slice(0,30);
 }

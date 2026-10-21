@@ -1,10 +1,25 @@
-# SKST Cụm 933 — Lấy BI & tự nhập 1.1.4
+# SKST Cụm 933 — Lấy BI & tự nhập 1.2.0
 
-## Cập nhật từ bản 1.0.x
+## Cập nhật từ bản cũ
 
 1. Giải nén ZIP mới, thay toàn bộ file trong thư mục baocaodmx-bi đã cài.
-2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.1.4**.
+2. Mở chrome://extensions, tìm SKST Cụm 933 và bấm nút tải lại ↻. Kiểm tra phiên bản **1.2.0**.
 3. Tại https://lebangdinh.github.io/baocaodmx/ nhấn Ctrl+Shift+R.
+
+## Bản 1.2.0 — Nhận diện thích nghi và cấu hình cập nhật
+
+- Tự kiểm tra `downloads/bi-recognition.json` trên baocaodmx trước mỗi lượt lấy dữ liệu. Một bộ cấu hình dùng suốt lượt, không đổi giữa hai shop. Popup hiển thị nguồn cấu hình và thông báo khi có bản tiện ích mới.
+- Cấu hình chỉ là danh sách tên tương đương cho các chức năng/cột đã hỗ trợ. Kiểm tra phiên bản, kích thước, khóa cho phép và tên trùng. Không tải mã JavaScript hay chạy câu lệnh từ GitHub.
+- Nếu không tải được cấu hình hợp lệ, dùng bản đã lưu tối đa 7 ngày; nếu không có thì dùng bản kèm tiện ích. Không tự phát minh tên mới. Cập nhật ZIP trên GitHub không tự thay bản tiện ích đã giải nén trên máy.
+- Báo cáo trả chậm tự nhận cấp hiện tại: Vùng/Khu vực/Siêu thị/Nhân viên, có thể bỏ qua cấp đã mở hoặc cấp Khu vực bị bỏ; quay lại qua Đà Nẵng, hoặc Tất cả vùng khi cần. Không tự dò tùy ý các vùng/shop khác.
+- Đọc cột trả chậm theo tên: đảo ba cột tổng, nhóm đối tác và cặp DT/% vẫn chuẩn hóa đúng. Từ chối tên cột mới chưa được khai báo, cột trùng/thiếu, nhiều nút cùng tên, thiếu dòng, sai shop/tháng, tổng đối tác không khớp DT trả góp (có dung sai làm tròn).
+- Các nút chung Lũy kế/Realtime, DT thực/quy đổi, tab Doanh thu/Nhân viên, Danh sách, Tải lại nhận được tên tương đương từ cấu hình; hỗ trợ nút có role button/tab. Cấu trúc dữ liệu doanh thu/thi đua vẫn theo parser hiện có; không cam kết tự thích nghi mọi cấu trúc bảng mới.
+- Tệp Kiểm tra nút BI có thêm phiên bản, số cấu hình và gợi ý đường dẫn API cùng miền từ danh sách tài nguyên trình duyệt. Bỏ query, không đọc nội dung phản hồi, thông tin đăng nhập hay bảng doanh thu; không tự gửi tệp đi đâu. Trường này có thể rỗng nếu trình duyệt không ghi lại tài nguyên phù hợp.
+- Chưa có bộ lấy dữ liệu API/Excel: cần mẫu phản hồi hoặc file xuất BI thực tế để xác nhận trường shop, tháng, phạm vi và số dòng trước khi xây bộ chuyển đổi. Không suy đoán endpoint.
+
+Cài bản này một lần: chép toàn bộ file (có thêm **recognition.js**) vào thư mục tiện ích → chrome://extensions bấm ↻ → kiểm tra **1.2.0** → tải lại tab BI và SKST. Sau đó những bản cập nhật chỉ thay tên nhận diện sẽ tự nhận khi bắt đầu chạy. Thay đổi logic cần bản tiện ích mới.
+
+Kiểm thử bằng dữ liệu tổng hợp và giao diện mô phỏng, gồm đảo cột, đổi tên qua cấu hình, mất mạng, cấu hình lỗi/hết hạn, đường đi rút ngắn, chặn nhập khi một báo cáo lỗi và các kiểm thử hồi quy BI. Chưa kiểm chứng trên phiên BI SSO thật.
 
 ## Cài lần đầu (mỗi máy một lần)
 

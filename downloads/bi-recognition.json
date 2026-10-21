@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "revision": 1,
+  "minVersion": "1.2.0",
+  "latestVersion": "1.2.0",
+  "aliases": {
+    "Lũy kế": [
+      "Lũy kế",
+      "Luỹ kế"
+    ],
+    "Realtime": [
+      "Realtime"
+    ],
+    "DT quy đổi": [
+      "DT quy đổi"
+    ],
+    "DT thực": [
+      "DT thực"
+    ],
+    "Tỷ trọng trả góp": [
+      "Tỷ trọng trả góp"
+    ],
+    "Xem": [
+      "Xem"
+    ],
+    "Tải lại": [
+      "Tải lại"
+    ],
+    "Doanh thu": [
+      "Doanh thu"
+    ],
+    "Danh sách": [
+      "Danh sách"
+    ],
+    "Chi tiết doanh thu": [
+      "Chi tiết doanh thu"
+    ],
+    "Tất cả vùng": [
+      "Tất cả vùng"
+    ],
+    "Vùng Trung Bộ": [
+      "Vùng Trung Bộ"
+    ],
+    "Đà Nẵng": [
+      "Đà Nẵng"
+    ],
+    "Vùng": [
+      "Vùng"
+    ],
+    "Khu vực": [
+      "Khu vực"
+    ],
+    "Siêu thị": [
+      "Siêu thị"
+    ],
+    "Nhân viên": [
+      "Nhân viên"
+    ],
+    "DT trả góp (triệu)": [
+      "DT trả góp (triệu)"
+    ],
+    "DT siêu thị (triệu)": [
+      "DT siêu thị (triệu)"
+    ],
+    "Tỷ trọng trả chậm %": [
+      "Tỷ trọng trả chậm %"
+    ],
+    "Payoo": [
+      "Payoo"
+    ],
+    "HomeCredit(HC)": [
+      "HomeCredit(HC)",
+      "Home Credit (HC)"
+    ],
+    "Kim Ngân Pay": [
+      "Kim Ngân Pay"
+    ],
+    "Trả góp KREDIVO": [
+      "Trả góp KREDIVO",
+      "KREDIVO"
+    ],
+    "FECredit(FE)": [
+      "FECredit(FE)",
+      "FE Credit (FE)"
+    ],
+    "Thẻ tín dụng - SMARTPOS": [
+      "Thẻ tín dụng - SMARTPOS",
+      "SMARTPOS"
+    ],
+    "Samsung Finance +": [
+      "Samsung Finance +",
+      "Samsung Finance+"
+    ]
+  }
+}

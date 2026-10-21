@@ -1,3 +1,4 @@
+if(typeof importScripts==='function')importScripts('recognition.js');
 const SITE='https://lebangdinh.github.io/baocaodmx/';
 const PROTOCOL='bi-batch-v2';
 const BI='https://baocao.dienmayxanh.com';
@@ -12,7 +13,7 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   // Only our packaged popup can start/cancel a collection.
   if(sender.id!==chrome.runtime.id||sender.url!==chrome.runtime.getURL('popup.html'))return;
   if(m.type==='inspect'){inspectCurrentBi().then(reply).catch(e=>reply({ok:false,error:e.message}));return true;}
-  if(m.type==='status'){reply({running:!!active,message});return;}
+  if(m.type==='status'){reply({running:!!active,message,recognition:recognitionStatus});return;}
   if(m.type==='cancel'){if(active?.committing){reply({message:'Đang ghi Firebase; chờ kết quả lưu.'});return;}if(active){active.cancelled=true;message='Đã yêu cầu dừng; chưa nhập dữ liệu của lượt này.';if(active.biTab)chrome.tabs.remove(active.biTab).catch(()=>{});}reply({message});return;}
   if(m.type==='start'){
     if(active){reply({message:'Đang có lượt đồng bộ chạy.'});return;}
@@ -62,6 +63,7 @@ async function start(run,profile){
     }
     if(!ready?.ok)throw Error(ready?.error||'Tải lại baocaodmx để nhận bản hỗ trợ tiện ích.');
     if(ready.protocol!==PROTOCOL)throw Error('Trang SKST còn bản cũ. Nhấn Ctrl+Shift+R trên baocaodmx rồi chạy lại.');
+    const recognition=await loadRecognition();
     const jobs=buildJobs(profile);
     const results=[],errors=[];let onUrl='';
     for(let i=0;i<jobs.length;i++){
@@ -74,7 +76,7 @@ async function start(run,profile){
         else if(navigate)await chrome.tabs.update(run.biTab,{url:URLS[task.job],active:true});
         if(navigate){await sleep(500);await waitComplete(run.biTab);}
         onUrl=URLS[task.job];
-        const res=await callBi(run.biTab,{type:'bi-run',...task,month:ready.month},s=>{void progress(label+' — '+s);});
+        const res=await callBi(run.biTab,{type:'bi-run',...task,month:ready.month,recognition},s=>{void progress(label+' — '+s);});
         if(!res?.ok)throw Error(res?.error||'Không lấy được dữ liệu.');
         results.push({...task,text:res.text,textThuc:res.textThuc});
       }catch(e){run.failed=true;throw Error(label+': '+e.message+' — Đã dừng và giữ tab BI để kiểm tra.');}
@@ -105,4 +107,34 @@ function buildJobs(profile){
    for(const store of job==='empComp'?['933','10341']:['both'])jobs.push({job,mode,store});
  }
  return jobs;
+}
+
+// One immutable dictionary per run. Never fetch or execute remote JavaScript.
+let recognitionStatus='Chưa kiểm tra cấu hình nhận diện.';
+async function loadRecognition(){
+ const installed=chrome.runtime.getManifest().version;
+ let cached=null,newer='';
+ try{cached=(await chrome.storage.local.get('recognitionCache')).recognitionCache;}catch{}
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
+ try{
+  const response=await fetch(SITE+'downloads/bi-recognition.json',{cache:'no-store',credentials:'omit',redirect:'error',signal:controller.signal});
+  if(!response.ok)throw Error('Không tải được cấu hình');
+  if(Number(response.headers.get('content-length'))>32768)throw Error('Cấu hình quá lớn');
+  const reader=response.body.getReader();let raw='',size=0;const decoder=new TextDecoder();
+  while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>32768){await reader.cancel();throw Error('Cấu hình quá lớn');}raw+=decoder.decode(value,{stream:true});}
+  raw+=decoder.decode();
+  const incoming=JSON.parse(raw);
+  if(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(incoming?.latestVersion)&&SkstRecognition.compare(incoming.latestVersion,installed)>0)newer=' Có tiện ích '+incoming.latestVersion+' mới trên web.';
+  const config=SkstRecognition.validate(incoming,installed);
+  if(cached?.config?.revision>config.revision)throw Error('Cấu hình lùi phiên bản');
+  try{await chrome.storage.local.set({recognitionCache:{config,at:Date.now()}});}catch{}
+  recognitionStatus='Nhận diện #'+config.revision+' · đã cập nhật'+(SkstRecognition.compare(config.latestVersion,installed)>0?' · Có tiện ích '+config.latestVersion+' mới trên web.':'.');
+  return config;
+ }catch{
+  if(cached&&Date.now()-cached.at>=0&&Date.now()-cached.at<7*86400000){
+   try{const config=SkstRecognition.validate(cached.config,installed);recognitionStatus='Nhận diện #'+config.revision+' · dùng bản lưu; chưa áp dụng được cấu hình mới.'+newer;return config;}catch{}
+  }
+  recognitionStatus='Dùng nhận diện kèm tiện ích; chưa tải được cấu hình phù hợp. Kiểm tra nút tải trên web nếu BI báo lỗi.'+newer;
+  return SkstRecognition.defaults;
+ }finally{clearTimeout(timer);}
 }
