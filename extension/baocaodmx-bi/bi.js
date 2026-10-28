@@ -263,6 +263,223 @@ async function run(mode, progress) {
 }
 
 
+// Capture every lazily rendered competition block. BI can show 24 programs
+// while keeping only 11 in the DOM. Selection(body) alone is NOT a full export.
+function competitionHeading(line){
+ return /^T\d{2}\s*[-–]\s*(?:T\d{2}\s*[-–]\s*)?\S/i.test(String(line||'').trim());
+}
+function competitionCounts(raw){
+ // BI displays two different counters: selected filter (41), shown results (24).
+ const values=[...String(raw).matchAll(/(?:^|\n)\s*(\d+)\s+chương trình\s*(?=\n|$)/gi)]
+  .map(m=>Number(m[1]));
+ return {selected:values.length>=2?values[0]:null,shown:values.length>=2?values[values.length-1]:null};
+}
+function competitionParts(raw){
+ const lines=String(raw).split(/\r?\n/).map(s=>s.trim());
+ const headers=[];
+ for(let i=0;i<lines.length;i++)if(competitionHeading(lines[i]))headers.push(i);
+ const parts=[];
+ for(let i=0;i<headers.length;i++){
+  const first=headers[i],last=i+1<headers.length?headers[i+1]:lines.length;
+  const content=lines.slice(first,last).filter(Boolean);
+  parts.push({name:lines[first].replace(/\s+/g,' ').trim(),content});
+ }
+ return {prefix:lines.slice(0,headers[0]??lines.length).filter(Boolean).join('\n'),parts};
+}
+function competitionShopLineCount(text){
+ return String(text).split(/\r?\n/).filter(x=>/^(?:TGD_DNA_HCH|AAR_DNA_HCH)\s*[-–—]/i.test(x.trim())).length;
+}
+// Diagnostics per program. A title alone does not mean the shop rows were copied.
+function competitionRows(part){
+ const content=part.content;
+ const stores=[];
+ let total=null;
+ for(let i=0;i<content.length;i++){
+  const line=content[i];
+  const isStore=/^(?:TGD_DNA_HCH|AAR_DNA_HCH)\s*[-–—]/i.test(line);
+  if(!isStore&&line!=='TỔNG')continue;
+  const valueLine=content[i+1]||'';
+  const amountCell=valueLine.split('\t')[0].trim();
+  const amount=/^-?\d[\d,.]*(?:\s|$)/.test(amountCell)?Number(amountCell.replace(/,/g,'')):null;
+  if(isStore)stores.push({name:line,unit:/^TGD_/i.test(line)?'TGD':'AAR',amount:Number.isFinite(amount)?amount:null,hasValue:Number.isFinite(amount)});
+  else total=Number.isFinite(amount)?amount:null;
+ }
+ return {stores,total};
+}
+function competitionProgramDiagnostics(part){
+ const rows=competitionRows(part);
+ const unique=[...new Set(rows.stores.map(r=>r.unit))];
+ const valid=rows.stores.filter(r=>r.hasValue);
+ const sum=valid.length===rows.stores.length&&valid.length?valid.reduce((s,r)=>s+r.amount,0):null;
+ return {program:part.name,storeRows:rows.stores.length,units:unique,
+  rowsWithValues:valid.length,total:rows.total,
+  storeSum:sum,totalDifference:sum!==null&&rows.total!==null?Number((rows.total-sum).toFixed(2)):null};
+}
+// A virtualized BI list may show the TGD and AAR lines of the SAME
+// program in different scroll frames. Assemble complete rows only from BI
+// text actually observed; never calculate/fill in missing values ourselves.
+function competitionMergeProgram(part,fragments){
+ const merged=part.content.slice();
+ const has=new Set();
+ for(let i=0;i<merged.length;i++){
+  if(/^(?:TGD_DNA_HCH|AAR_DNA_HCH)\s*[-–—]/i.test(merged[i]))
+   has.add(merged[i].split('_')[0].toUpperCase());
+ }
+ for(const candidate of fragments){
+  const rows=candidate.content;
+  for(let i=0;i<rows.length-1;i++){
+   const row=rows[i];
+   if(!/^(?:TGD_DNA_HCH|AAR_DNA_HCH)\s*[-–—]/i.test(row))continue;
+   const unit=row.split('_')[0].toUpperCase();
+   if(has.has(unit))continue;
+   const cells=rows[i+1].split('\t').map(x=>x.trim());
+   if(cells.length<5||!cells.slice(0,2).every(v=>/^-?\d[\d,.]*$/.test(v)))continue;
+   merged.push(row,rows[i+1]);
+   has.add(unit);
+  }
+ }
+ return {name:part.name,content:merged};
+}
+// Validate the complete numeric row expected by the SKST paste parser,
+// not merely its first amount cell. Values of zero are valid.
+function competitionValidateDataCells(part){
+ for(let i=0;i<part.content.length;i++){
+  if(!/^(?:TGD_DNA_HCH|AAR_DNA_HCH)\s*[-–—]/i.test(part.content[i]))continue;
+  const values=(part.content[i+1]||'').split('\t').map(x=>x.trim());
+  if(values.length<5||!values.slice(0,2).every(v=>/^-?\d[\d,.]*$/.test(v)))
+   throw Error('Chương trình '+part.name+' có dòng shop '+part.content[i]+' thiếu Doanh thu/Số lượng hoặc TARGET. Đã chặn nhập.');
+  if(!/^(?:\d+(?:[.,]\d+)?%|-)$/.test(values[2]))
+   throw Error('Chương trình '+part.name+' có dòng shop '+part.content[i]+' thiếu % hoàn thành. Đã chặn nhập.');
+ }
+}
+function competitionScrollCandidates(){
+ const leaf=[...document.querySelectorAll('body *')].find(e=>
+  vis(e)&&e.childElementCount===0&&competitionHeading(txt(e)));
+ if(!leaf)return [];
+ const found=[];
+ for(let cur=leaf.parentElement;cur;cur=cur.parentElement){
+  if(cur.scrollHeight>cur.clientHeight+60&&cur.clientHeight>90){
+   const style=getComputedStyle(cur);
+   if(/auto|scroll|overlay|hidden/.test(style.overflowY)||cur===document.scrollingElement||cur===document.body)
+    found.push(cur);
+  }
+ }
+ const doc=document.scrollingElement;
+ if(doc&&doc.scrollHeight>doc.clientHeight+60&&!found.includes(doc))found.push(doc);
+ return found;
+}
+function competitionScrollPosition(el){return el===document.scrollingElement ? window.scrollY : el.scrollTop;}
+function competitionScrollTo(el,y){
+ if(el===document.scrollingElement)window.scrollTo({top:y,left:window.scrollX,behavior:'instant'});
+ else el.scrollTop=y;
+}
+async function competitionCaptureFull(level,mode,progress=()=>{}){
+ if(!['Siêu thị','Nhân viên'].includes(level))throw Error('Cấp lấy Thi đua không hợp lệ.');
+ const original=await competitionStable(level,'',mode);
+ const counts=competitionCounts(original);
+ if(!Number.isInteger(counts.shown)||counts.shown<1||counts.shown>200)
+  throw Error('Không tách được số chương trình đang hiển thị từ BI (khác số chương trình đã chọn). Chưa nhập.');
+ const rootParts=competitionParts(original);
+ const candidates=competitionScrollCandidates();
+ const seen=new Map(),observedUnits=new Map(),fragments=new Map();
+ let prefix=rootParts.prefix;
+ const ingest=raw=>{
+  const parts=competitionParts(raw);
+  // Keep header/navigation text from the first view. Do not join copies of the header.
+  for(const part of parts.parts){
+   const versions=fragments.get(part.name)||[];
+   if(!versions.some(p=>p.content.join('\n')===part.content.join('\n'))){
+    versions.push(part);
+    if(versions.length>18)versions.shift();
+    fragments.set(part.name,versions);
+   }
+   const units=observedUnits.get(part.name)||new Set();
+   for(const record of competitionRows(part).stores)units.add(record.unit);
+   observedUnits.set(part.name,units);
+   const prev=seen.get(part.name);
+   // A partially virtualized block may be present in multiple scroll views.
+   // Keep the version containing most rows/characters, never sum duplicate rows.
+   const quality=p=>competitionShopLineCount(p.content.join('\n'))*10000+p.content.join('\n').length;
+   if(!prev||quality(part)>quality(prev))seen.set(part.name,part);
+  }
+ };
+ ingest(original);
+ const diagnostic=[];
+ // In most BI versions an inner scroll pane virtualizes the list. Try its
+ // ancestors too, never assume the whole document is the scrollable element.
+ for(const [index,container] of candidates.entries()){
+  // Even if all titles are visible, the *rows* of a tall program may be virtualized.
+  const originalY=competitionScrollPosition(container);
+  let steps=0;
+  try{
+   competitionScrollTo(container,0);
+   await sleep(450);
+   ingest(pageText());
+   let stagnation=0;
+   for(let n=0;n<180;n++){
+    const height=container.clientHeight||window.innerHeight;
+    const end=Math.max(0,container.scrollHeight-height);
+    const old=competitionScrollPosition(container);
+    const next=Math.min(end,old+Math.max(180,Math.floor(height*.72)));
+    if(next<=old+1)break;
+    competitionScrollTo(container,next);
+    await sleep(250);
+    // Give React/lazy render a chance to replace the virtual rows.
+    let raw=pageText();
+    for(let attempt=0;attempt<4&&raw===original&&next>0;attempt++){await sleep(200);raw=pageText();}
+    const before=seen.size;ingest(raw);steps++;
+    progress('Đang đọc đủ Thi đua '+level+': '+seen.size+'/'+counts.shown+' chương trình…');
+    if(seen.size===before)stagnation++;else stagnation=0;
+    if(stagnation>=12&&competitionScrollPosition(container)>=end-2)break;
+   }
+   diagnostic.push({index,tag:container.tagName,steps,found:seen.size});
+  }finally{competitionScrollTo(container,originalY);await sleep(200);}
+ }
+ if(seen.size!==counts.shown){
+  throw Error('BI hiển thị '+counts.shown+' chương trình nhưng chỉ lấy được '+seen.size+
+   ' tiêu đề (đã thử cuộn '+diagnostic.map(d=>d.steps).join('/')+' bước). Đã CHẶN nhập để tránh thiếu dòng. Chụp lỗi này để kiểm tra.');
+ }
+ // Merge fragments of the same program if its two stores were rendered
+ // separately. Re-run all checks on the exact text sent to SKST.
+ if(level==='Siêu thị'){
+  for(const [name,part] of seen){
+   seen.set(name,competitionMergeProgram(part,fragments.get(name)||[part]));
+  }
+ }
+ const programChecks=[];
+ for(const [name,part] of seen){
+  const body=part.content.join('\n');
+  if(!/(?:DOANH THU|SỐ LƯỢNG)/i.test(body))
+   throw Error('Chương trình '+name+' thiếu tiêu đề cột. Chưa nhập.');
+  if(mode==='realtime'&&!/(?:DOANH THU|SỐ LƯỢNG)\s*\(RT\)/i.test(body))
+   throw Error('Chương trình '+name+' không có nhãn số liệu (RT). Chưa nhập Realtime.');
+  if(mode==='realtime'&&!/% HT NGÀY/i.test(body))
+   throw Error('Chương trình '+name+' thiếu cột % HT NGÀY. Chưa nhập Realtime.');
+  if(level==='Siêu thị'){
+   competitionValidateDataCells(part);
+   const check=competitionProgramDiagnostics(part);
+   programChecks.push(check);
+   if(check.storeRows===0||check.rowsWithValues!==check.storeRows||check.total===null)
+    throw Error('Chương trình '+name+' thiếu dòng siêu thị, số liệu hoặc dòng TỔNG. Chưa nhập.');
+   if(new Set(check.units).size!==check.storeRows)
+    throw Error('Chương trình '+name+' bị trùng dòng siêu thị. Chưa nhập.');
+   if(check.totalDifference!==null&&Math.abs(check.totalDifference)>0.06)
+    throw Error('Chương trình '+name+' không khớp tổng BI: TỔNG '+check.total+' nhưng cộng dòng shop '+check.storeSum+' (chênh '+check.totalDifference+'). Có thể bị thiếu shop. Đã CHẶN nhập.');
+   // Scroll virtualization may show two different shop rows in different frames.
+   const units=observedUnits.get(name)||new Set();
+   if([...units].some(unit=>!check.units.includes(unit)))
+    throw Error('Chương trình '+name+' có dòng '+[...units].filter(u=>!check.units.includes(u)).join(', ')+
+     ' ở phần cuộn khác nhưng chưa ghép được. Đã chặn nhập để tránh thiếu dòng.');
+  }
+ }
+ // Preserve original program order by first encounter; all values are captured
+ // from BI, not invented. The SKST parser still handles the resulting text.
+ const merged=prefix+'\n'+[...seen.values()].map(p=>p.content.join('\n')).join('\n')+'\n';
+ return {text:merged,selectedCount:counts.selected,shownCount:counts.shown,
+  collectedCount:seen.size,storeLines:competitionShopLineCount(merged),
+  programChecks,steps:diagnostic};
+}
+
 // Monthly competition now navigates report rows and the breadcrumb.
 function competitionLevel(){
  return ['Nhân viên','Siêu thị','Cụm','Khu vực','Vùng'].find(name=>
@@ -327,7 +544,7 @@ async function competitionStable(level,store='',mode='month'){
  if(!done)throw Error('Chưa xác minh được Thi đua cấp '+level+(store?' shop '+store:'')+'. Giữ tab BI để kiểm tra.');
  return result;
 }
-async function competitionShops(mode,progress){
+async function competitionShops(mode,progress,details=false){
  await setPeriod(mode);
  if(!await tab('Danh sách'))throw Error('Không thấy chế độ Danh sách.');
  await allCompetitionPrograms();
@@ -350,10 +567,11 @@ async function competitionShops(mode,progress){
    target.click();await sleep(500);await competitionStable(level,'',mode);
   }
  }
- const text=await competitionStable('Siêu thị','',mode);
+ await competitionStable('Siêu thị','',mode);
  if(!competitionLink('Đà Nẵng')||!['933','10341'].every(code=>findCompetitionStore(code)))
   throw Error('Chưa thấy đủ hai shop tại Đà Nẵng; chưa lấy bảng Thi đua.');
- return text;
+ const full=await competitionCaptureFull('Siêu thị',mode,progress);
+ return details?full:full.text;
 }
 async function runCompetitionDrilldown(mode,progress,store=''){
  const text=await competitionShops(mode,progress);
@@ -362,7 +580,9 @@ async function runCompetitionDrilldown(mode,progress,store=''){
  if(!target)throw Error('Không thấy tên shop '+store+'.');
  progress('Đang mở Thi đua nhân viên Lũy kế shop '+store+'…');
  target.click();await sleep(500);
- return {ok:true,text:await competitionStable('Nhân viên',store,mode),store};
+ await competitionStable('Nhân viên',store,mode);
+ const full=await competitionCaptureFull('Nhân viên',mode,progress);
+ return {ok:true,text:full.text,store};
 }
 
 // Thi đua: Lũy kế/Realtime + "Danh sách", lọc Khu vực, Tải lại, đợi "N chương trình".
@@ -460,7 +680,6 @@ async function runEmpComp(mode, progress, store) {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'bi-run') return;
   port.onMessage.addListener(async (m) => {
-    if(m.type==='bi-inspect'){port.postMessage(inspectBiControls());return;}
     if (m.type !== 'bi-run') return;
     try {
       const res = await runChecked(m, p => port.postMessage({progress:p}));

@@ -12,7 +12,6 @@ async function page(tabId,kind,data={}) {return chrome.tabs.sendMessage(tabId,{c
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   // Only our packaged popup can start/cancel a collection.
   if(sender.id!==chrome.runtime.id||sender.url!==chrome.runtime.getURL('popup.html'))return;
-  if(m.type==='inspect'){inspectCurrentBi().then(reply).catch(e=>reply({ok:false,error:e.message}));return true;}
   if(m.type==='status'){reply({running:!!active,message,recognition:recognitionStatus});return;}
   if(m.type==='cancel'){if(active?.committing){reply({message:'Đang ghi Firebase; chờ kết quả lưu.'});return;}if(active){active.cancelled=true;message='Đã yêu cầu dừng; chưa nhập dữ liệu của lượt này.';if(active.biTab)chrome.tabs.remove(active.biTab).catch(()=>{});}reply({message});return;}
   if(m.type==='start'){
@@ -89,14 +88,6 @@ async function start(run,profile){
     message=result.message;badge('OK','#15803d');
   }catch(e){badge('!','#dc2626');await progress(e.message);if(appTab)await page(appTab.id,'abort',{runId:run.id,message:e.message}).catch(()=>{});}
   finally{clearInterval(beat);if(run.biTab&&!run.failed)await chrome.tabs.remove(run.biTab).catch(()=>{});if(appTab&&!run.failed)await chrome.tabs.update(appTab.id,{active:true}).catch(()=>{});}
-}
-
-async function inspectCurrentBi(){
- const tabs=await chrome.tabs.query({});
- const candidates=tabs.filter(t=>t.url?.startsWith(BI+'/'));
- const selected=candidates.find(t=>t.active)||(candidates.length===1?candidates[0]:null);
- if(!selected)throw Error('Chọn tab BI đang bị vướng rồi mở tiện ích và bấm Kiểm tra nút BI.');
- return callBi(selected.id,{type:'bi-inspect'},()=>{});
 }
 
 function buildJobs(profile){

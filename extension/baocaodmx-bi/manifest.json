@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SKST Cụm 933 — Lấy BI & tự nhập",
-  "version": "1.2.5",
-  "description": "Lấy báo cáo BI và chuyển vào baocaodmx qua quyền Firebase hiện có.",
+  "version": "1.2.9",
+  "description": "Tự lấy đủ Thi đua Lũy kế/Realtime theo số chương trình BI hiển thị; kiểm tra từng dòng trước khi tự nhập SKST.",
   "permissions": [
     "tabs",
     "storage"

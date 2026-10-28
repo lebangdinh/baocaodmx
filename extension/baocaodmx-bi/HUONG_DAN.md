@@ -1,3 +1,53 @@
+# SKST BI Extension v1.2.9 — Bản chính thức (28/10/2026)
+
+## Thay đổi từ v1.2.8
+
+- **Thi đua siêu thị Lũy kế và Realtime:** cùng cơ chế cuộn quét, thu đủ số chương trình BI đang hiển thị, ghép các dòng TGD/AAR của cùng chương trình nếu bị tách giữa các lần cuộn. Không tự tạo số liệu.
+- Đối chiếu tổng TỔNG với tổng dòng shop trong từng chương trình, không chấp nhận trùng TGD/AAR, kiểm tra cột Doanh thu/Số lượng, TARGET và % HT theo đúng chế độ, kể cả dòng số 0. Khi không chứng minh đủ, **dừng trước khi ghi dữ liệu**.
+- Đưa dữ liệu về đúng định dạng văn bản nhiều dòng như Copy BI để parser hiện tại của SKST xử lý; giữ nguyên luồng đồng bộ tự động từ các bản trước.
+- Đã **gỡ khỏi popup chính thức** các nút tạm thời “Đối chiếu Lũy kế”, “Đối chiếu Realtime” và “Kiểm tra nút BI”, cũng như các lệnh chẩn đoán phía sau.
+- Không chỉnh mã nguồn website SKST, Firebase rules hay bộ parser trên máy chủ.
+
+## Cài đặt
+
+1. Giải nén ZIP. Ở `chrome://extensions`, tắt/gỡ bản extension cũ để tránh chạy song song.
+2. Chọn **Tải tiện ích đã giải nén** → thư mục `baocaodmx-bi` (chứa `manifest.json`). Xác nhận phiên bản **1.2.9**.
+3. Tải lại tab BI và SKST. Đăng nhập bình thường.
+4. Chọn **Lũy kế & thi đua nhân viên**, **Chỉ Realtime hôm nay** hoặc **Toàn bộ báo cáo SKST**, rồi bấm **Lấy dữ liệu & tự nhập**.
+5. Trước lần ghi đè dữ liệu đang dùng, nên xuất/lưu bản sao dữ liệu hiện tại và kiểm tra số dòng đã nhập. Nếu số chương trình hiện có trên BI hoặc cấu trúc dòng thay đổi, extension sẽ dừng và báo lỗi thay vì cố nhập thiếu.
+
+## Phạm vi xác nhận
+
+Có bản chụp BI thực tế 24 chương trình/35 dòng ở Realtime v1.2.8; file JSON Lũy kế trước đó chụp thiếu nên chưa phải đối chiếu đủ. 1.2.9 được thử trên dữ liệu Realtime đã cung cấp và mô phỏng trường hợp phân mảnh/thiếu dòng Lũy kế; chưa chạy được trên BI đã đăng nhập từ môi trường tạo bản này. Vì vậy vẫn nên xác nhận số chương trình, số dòng sau lần chạy trên BI thật.
+
+---
+
+# Bản 1.2.8 — Bổ sung đối chiếu Thi đua Realtime (28/10/2026)
+
+- Hai nút tách biệt: **Đối chiếu Thi đua Lũy kế** và **Đối chiếu Thi đua Realtime**, chỉ tải JSON, **không ghi Firebase**.
+- Realtime chọn tab đúng chế độ; yêu cầu có `% HT NGÀY` và nhãn `(RT)` ở từng chương trình.
+- Cả hai chế độ kiểm tra số chương trình thực sự hiển thị, cuộn quét các phần bảng và đếm dòng siêu thị có số liệu; nếu thiếu thì chặn nhập.
+- JSON có `mode`, `programChecks`, `scrollDiagnostics` để kiểm tra từng chương trình TGD/AAR, giá trị tổng và tổng cộng theo shop (chỉ chẩn đoán, không ép kết quả phải trùng vì dữ liệu BI có thể khác cách tổng hợp).
+- Chưa thể xác nhận số dòng Realtime thực tế nếu chưa chạy trên trang BI đã đăng nhập; cần dùng nút xuất đối chiếu và gửi JSON.
+- Nếu một chương trình bị BI ẩn hẳn một dòng trong mọi lần cuộn, không thể tự suy ra số dòng thiếu chỉ từ DOM. Đối chiếu tổng trong JSON sẽ giúp phát hiện điểm nghi vấn.
+
+Cài: giải nén và bật thư mục `baocaodmx-bi` ở `chrome://extensions`, tắt bản cũ, tải lại trang BI và chọn nút **Đối chiếu Thi đua Realtime · không nhập**.
+
+---
+
+# Bản 1.2.7 — Thu đủ chương trình Thi đua (28/10/2026)
+
+- BI có **hai bộ đếm**: 41 chương trình đang được chọn, 24 chương trình thực sự hiển thị. Bản 1.2.6 lấy nhầm bộ đếm 41.
+- Bản chụp thực tế chỉ thu 11 tiêu đề/15 dòng shop; nguyên nhân trực tiếp là `pageText()` đọc DOM tại một thời điểm trong khi danh sách dài được tải/cuộn dần.
+- Bản 1.2.7 thử cuộn những khung chứa chương trình và ghép các nhóm theo tiêu đề; chỉ cho phép đồng bộ nếu số nhóm thu được khớp bộ đếm **đang hiển thị** trên BI.
+- Nếu vẫn thiếu chương trình, dừng và KHÔNG nhập Firebase. Không đổi logic parser website, không truy cập API riêng tư, không đụng tài khoản SSO.
+- Nút **Xuất dữ liệu Thi đua đối chiếu · không nhập** dùng chính cách thu đầy đủ; hãy thử nút này trước khi chạy đồng bộ thật. Nếu chưa đủ 24/24 nó sẽ báo lỗi, không tạo dữ liệu thiếu.
+- Kiểm thử cú pháp mã nguồn và giao diện BI mô phỏng; **chưa kiểm thử trực tiếp trên BI đã đăng nhập SSO**.
+
+Cài: giải nén ZIP, tắt bản cũ, tải thư mục `baocaodmx-bi` chứa `manifest.json` trong `chrome://extensions`, tải lại tab BI, chạy nút Xuất đối chiếu và kiểm tra **24/24** trước khi bắt đầu đồng bộ.
+
+---
+
 # Sửa 1.2.2
 
 Nhận cả menu danh sách phẳng “Tìm siêu thị…” ở Doanh thu và menu cây ở Thi đua. Bổ sung placeholder ô tìm kiếm vào chẩn đoán ngay cả khi chưa nhận được menu.
@@ -133,3 +183,12 @@ Cập nhật: chép đè toàn bộ file tiện ích → chrome://extensions b�
 
 ## Bản 1.2.5
 Sửa điều kiện chờ Thi đua nhân viên: bảng này không có % HT THÁNG. Kiểm tra HẠNG TRONG ST, cột SIÊU THỊ, breadcrumb và mã shop trong các dòng trước khi hoàn tất lấy dữ liệu. Bước tiếp theo quay lại Đà Nẵng và mở shop còn lại.
+
+
+## Bản chẩn đoán 1.2.6: truy nguyên 15 dòng Thi đua
+- Mở BI, đăng nhập SSO và chọn tab Thi đua.
+- Mở popup tiện ích và bấm **Xuất dữ liệu Thi đua đối chiếu · không nhập**.
+- Tiện ích mở cấp Siêu thị, bật Lũy kế và chọn tất cả chương trình; xuất JSON tại máy.
+- JSON có nguyên chữ BI trước parser, số chương trình hiển thị và danh sách tên nhóm, không chứa khóa đăng nhập hay token. Có thể chứa dữ liệu báo cáo nội bộ: chỉ chia sẻ với người được phép.
+- Thao tác chẩn đoán không chạy parser SKST, không ghi Firebase và không thay phiên Cloud Handoff.
+- Bản này KHÔNG giải quyết việc parser web nhận 15 dòng; cần dùng JSON này đối chiếu đầu ra parser để xác định lỗi và sửa website sau.
