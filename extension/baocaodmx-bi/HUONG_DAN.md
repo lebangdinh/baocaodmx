@@ -1,3 +1,25 @@
+# Sửa 1.2.2
+
+Nhận cả menu danh sách phẳng “Tìm siêu thị…” ở Doanh thu và menu cây ở Thi đua. Bổ sung placeholder ô tìm kiếm vào chẩn đoán ngay cả khi chưa nhận được menu.
+
+# Bản sửa 1.2.2 — menu Siêu thị dạng cây
+
+- Mở các nhánh thu gọn trong menu Siêu thị trước khi tìm mã shop.
+- Nhận checkbox trong label hoặc hàng div; chỉ thao tác trong menu.
+- Xóa tìm kiếm, chọn Tất cả, bỏ lựa chọn cũ rồi chọn chính xác 933 + 10341 (hoặc một shop cho thi đua nhân viên).
+- Đóng menu sau thao tác. Chẩn đoán bổ sung cấu trúc menu và checkbox.
+- Đã kiểm tra trên giao diện mô phỏng, chưa chạy trên phiên BI đăng nhập thực tế.
+
+## Cài cập nhật
+1. Giải nén ZIP. Vào chrome://extensions, tắt bản SKST cũ để tránh chạy hai bản.
+2. Bật Chế độ dành cho nhà phát triển → Tải tiện ích đã giải nén → chọn thư mục baocaodmx-bi có manifest.json.
+3. Kiểm tra phiên bản 1.2.2, tải lại cả tab BI và tab SKST.
+4. Trên SKST bấm Lấy dữ liệu & tự nhập.
+5. Nếu lỗi tiếp, mở menu Siêu thị rồi dùng Kiểm tra nút BI và gửi JSON mới cùng thông báo lỗi.
+
+---
+Hướng dẫn gốc:
+
 # SKST Cụm 933 — Lấy BI & tự nhập 1.2.0
 
 ## Cập nhật từ bản cũ
@@ -100,3 +122,14 @@ BI thêm bộ chọn Cấp hiển thị có chữ Nhân viên phía trên đư�
 Đã tái hiện thông báo lỗi cũ với bộ chọn cấp; kiểm tra hồi quy trên cả hai shop, đường đi lấy đủ hai bảng, parser hiện tại và kiểm tra từ chối sai shop. Chưa có phiên SSO thật để chạy trực tiếp.
 
 Cập nhật: chép đè toàn bộ file tiện ích → chrome://extensions bấm ↻ → xác nhận phiên bản 1.1.4 → tải lại tab BI và baocaodmx trước khi chạy.
+
+
+## Bản 1.2.3 – Thi đua Lũy kế
+- Chọn tất cả Ngành hàng (chương trình), vào Vùng Trung Bộ → Đà Nẵng để lấy bảng siêu thị.
+- Bấm tên shop để lấy nhân viên; quay lại Đà Nẵng trước khi vào shop còn lại.
+- Kiểm tra cấp hiển thị và đủ hai shop trước khi lấy bảng.
+- Bản 1.2.4: Realtime cũng chọn tất cả chương trình và vào Đà Nẵng; xác minh cột (RT) và % HT NGÀY trước khi lấy bảng.
+- Đã kiểm tra cú pháp và mô phỏng thứ tự điều hướng; chưa kiểm thử BI thực tế hoặc đối chiếu bảng nhập cuối.
+
+## Bản 1.2.5
+Sửa điều kiện chờ Thi đua nhân viên: bảng này không có % HT THÁNG. Kiểm tra HẠNG TRONG ST, cột SIÊU THỊ, breadcrumb và mã shop trong các dòng trước khi hoàn tất lấy dữ liệu. Bước tiếp theo quay lại Đà Nẵng và mở shop còn lại.

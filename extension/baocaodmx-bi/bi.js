@@ -104,27 +104,89 @@ async function setPeriod(mode) {
 // Combined filters mirror the user's copy-paste workflow. Only employee
 // competition requests one store; all other jobs request both stores together.
 let requestedStore = '', requestedPeriod = '';
+// Scope all tree actions to the open store picker, never the report table.
+function storePicker(){
+ const search=[...document.querySelectorAll('input')].find(e=>vis(e)&&/^Tìm (?:siêu thị|công ty, vùng, cụm, khu vực, siêu thị)(?:\.{3}|…)?$/i.test((e.placeholder||'').replace(/\s+/g,' ').trim()));
+ if(!search)return null;
+ for(let root=search.parentElement;root&&root!==document.body;root=root.parentElement){
+  if([...root.querySelectorAll('button')].some(e=>txt(e)==='Bỏ chọn tất cả'))return root;
+ }
+ return null;
+}
 function storeFilterLabels(){
- return [...document.querySelectorAll('label')].filter(l=>vis(l)&&l.querySelector('input[type=checkbox]')&&/^\d+\s*[-–—]/.test(txt(l)));
+ const root=storePicker();if(!root)return [];
+ return [...root.querySelectorAll('input[type=checkbox]')].map(input=>{
+  for(let row=input.parentElement;row&&row!==root;row=row.parentElement){
+   if(row.querySelectorAll('input[type=checkbox]').length!==1)break;
+   if(/^\d+\s*[-–—]/.test(txt(row)))return row;
+  }
+  return null;
+ }).filter(e=>e&&vis(e));
 }
 function labelStoreCode(label){return txt(label).match(/^(\d+)\s*[-–—]/)?.[1];}
 function desiredStoreCodes(){return requestedStore==='both'?['933','10341']:[requestedStore];}
+function collapsedStoreToggle(root){
+ const icons=[...root.querySelectorAll('svg.lucide-chevron-right,svg[data-lucide="chevron-right"],svg')].filter(vis);
+ for(const icon of icons){
+  const right=icon.matches('.lucide-chevron-right,[data-lucide="chevron-right"]')||[...icon.querySelectorAll('path,polyline')].some(e=>/^(m9 18 6-6-6-6|9 18 15 12 9 6)$/i.test((e.getAttribute('d')||e.getAttribute('points')||'').trim()));
+  if(!right)continue;
+  const control=icon.closest('button,[role=button]')||icon.parentElement;
+  // Only an icon-only expander; never click a checkbox label or a whole branch.
+  if(control&&root.contains(control)&&!txt(control)&&!control.querySelector('input')&&control.getAttribute('aria-expanded')!=='true')return control;
+ }
+ return [...root.querySelectorAll('[aria-expanded="false"]')].find(e=>vis(e)&&!e.querySelector('input')&&!txt(e))||null;
+}
+async function expandStoreTree(){
+ for(let step=0;step<100;step++){
+  const root=storePicker();if(!root)throw Error('Menu Siêu thị đã đóng khi đang mở cây.');
+  const toggle=collapsedStoreToggle(root);
+  if(!toggle)return;
+  const before=root.innerHTML;
+  toggle.click();
+  if(!await waitFor(()=>storePicker()&&storePicker().innerHTML!==before,2000))throw Error('Không mở được nhánh Siêu thị; dùng Kiểm tra nút BI để gửi chẩn đoán.');
+  await sleep(150);
+ }
+ throw Error('Cây Siêu thị vượt giới hạn kiểm tra; chưa lấy dữ liệu.');
+}
 async function area() {
-  let button=bs().find(x=>/^Siêu thị/.test(btxt(x)));
-  if(!button)return 'Không thấy bộ lọc Siêu thị';
-  button.click();
-  const labels=await waitFor(storeFilterLabels,5000),wanted=desiredStoreCodes();
-  if(!labels)return 'Không đọc được danh sách Siêu thị';
-  if(!wanted.every(code=>labels.some(l=>labelStoreCode(l)===code))){button.click();return 'Bộ lọc chưa có đủ shop '+wanted.join(' + ');}
-  for(const code of labels.map(labelStoreCode)){
-    const current=storeFilterLabels().find(l=>labelStoreCode(l)===code);
-    if(!current)return 'Danh sách siêu thị thay đổi; chưa xác minh được bộ lọc.';
-    if(current.querySelector('input').checked!==wanted.includes(code)){current.click();await sleep(180);}
+ const wanted=desiredStoreCodes();
+ let button=bs().find(x=>/^Siêu thị/.test(btxt(x)));
+ if(!button)return 'Không thấy bộ lọc Siêu thị';
+ try{
+  if(!storePicker())button.click();
+  if(!await waitFor(storePicker,5000))return 'Không nhận diện được menu Siêu thị';
+  // Clear stale search so hidden selected shops cannot escape validation.
+  const search=storePicker().querySelector('input[placeholder]');
+  if(search?.value){
+   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(search,'');
+   search.dispatchEvent(new Event('input',{bubbles:true}));
+   search.dispatchEvent(new Event('change',{bubbles:true}));
+   await sleep(400);
   }
-  const selected=storeFilterLabels().filter(l=>l.querySelector('input').checked).map(labelStoreCode);
+  // Show inactive stores too, if this picker exposes a status filter.
+  const all=[...storePicker().querySelectorAll('button')].find(e=>/^Tất cả(?:\s*\(\d+\))?$/.test(txt(e)));
+  if(all){all.click();await sleep(200);}
+  await expandStoreTree();
+  let labels=storeFilterLabels();
+  if(!wanted.every(code=>labels.filter(l=>labelStoreCode(l)===code).length===1))return 'Bộ lọc chưa có đúng shop '+wanted.join(' + ');
+  const clear=[...storePicker().querySelectorAll('button')].find(e=>txt(e)==='Bỏ chọn tất cả');
+  if(!clear)return 'Không thấy nút Bỏ chọn tất cả';
+  clear.click();await sleep(200);
+  await expandStoreTree();
+  for(const code of wanted){
+   const current=storeFilterLabels().find(l=>labelStoreCode(l)===code);
+   const input=current?.querySelector('input[type=checkbox]');
+   if(!input)return 'Danh sách Siêu thị thay đổi khi chọn '+code;
+   if(!input.checked){input.click();await sleep(180);}
+  }
+  const selected=storeFilterLabels().filter(l=>l.querySelector('input[type=checkbox]').checked).map(labelStoreCode);
   const ok=selected.length===wanted.length&&wanted.every(code=>selected.includes(code));
-  button=bs().find(x=>/^Siêu thị/.test(btxt(x)));if(button)button.click();await sleep(400);
   return ok?'':'Chưa chọn đúng shop '+wanted.join(' + ');
+ }catch(e){return e.message;}
+ finally{
+  button=bs().find(x=>/^Siêu thị/.test(btxt(x)));
+  if(storePicker()&&button){button.click();await sleep(400);}
+ }
 }
 
 function pageText() {
@@ -200,35 +262,112 @@ async function run(mode, progress) {
   return { ok: true, text: got.qd, textThuc: got.thuc };
 }
 
+
+// Monthly competition now navigates report rows and the breadcrumb.
+function competitionLevel(){
+ return ['Nhân viên','Siêu thị','Cụm','Khu vực','Vùng'].find(name=>
+  bs().some(b=>btxt(b)===name&&isSelectedButton(b)))||'';
+}
+function competitionLink(label){
+ const matches=[...document.querySelectorAll('a,button,span,td,[role=button]')]
+  .filter(e=>vis(e)&&txt(e)===label);
+ return matches.find(e=>!matches.some(child=>child!==e&&e.contains(child)))||null;
+}
+function programPicker(){
+ const search=[...document.querySelectorAll('input')].find(e=>vis(e)&&/^Tìm chương trình/.test(e.placeholder||''));
+ for(let root=search?.parentElement;root&&root!==document.body;root=root.parentElement){
+  if([...root.querySelectorAll('button')].some(b=>txt(b)==='Chọn tất cả'))return root;
+ }
+ return null;
+}
+async function allCompetitionPrograms(){
+ const opener=()=>bs().find(b=>/^Ngành hàng \(chương trình\)/.test(btxt(b)));
+ if(!opener())throw Error('Không thấy bộ lọc Ngành hàng (chương trình).');
+ if(!programPicker())opener().click();
+ if(!await waitFor(programPicker,5000))throw Error('Không mở được danh sách chương trình.');
+ try{
+  const search=programPicker().querySelector('input');
+  if(search.value){
+   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(search,'');
+   search.dispatchEvent(new Event('input',{bubbles:true}));
+   search.dispatchEvent(new Event('change',{bubbles:true}));await sleep(400);
+  }
+  [...programPicker().querySelectorAll('button')].find(b=>txt(b)==='Chọn tất cả').click();
+  if(!await waitFor(()=>{
+   const boxes=[...(programPicker()?.querySelectorAll('input[type=checkbox]')||[])];
+   return boxes.length&&boxes.every(b=>b.checked);
+  },5000))throw Error('Chưa xác minh được chọn tất cả chương trình.');
+ }finally{if(programPicker()&&opener()){opener().click();await sleep(400);}}
+}
+// Match both the breadcrumb and populated store cells, so a new breadcrumb
+// cannot validate rows left over from the previous shop during an async render.
+function competitionEmployeeStoreMatches(store){
+ const breadcrumb=[...document.querySelectorAll('a,button,span')]
+  .some(e=>vis(e)&&matchesCompetitionStore(txt(e),store));
+ const cells=[...document.querySelectorAll('tbody td')].filter(e=>vis(e)&&
+  /^(?:\d+\s*[-–—]\s*)?(?:TGD|AAR)_DNA_HCH\s*[-–—]/i.test(txt(e)));
+ return breadcrumb&&cells.length>0&&cells.every(e=>matchesCompetitionStore(txt(e),store));
+}
+async function competitionStable(level,store='',mode='month'){
+ let last='',stable=0,result='';
+ const done=await waitFor(()=>{
+  const t=pageText();
+  const right=competitionLevel()===level && !installmentBusy() && /\d+\s+chương trình/i.test(t)
+   && (level==='Nhân viên'
+    ? mode==='month'&&employeeCompetitionView()&&/(?:DOANH THU|SỐ LƯỢNG)/i.test(t)&&/SIÊU THỊ/i.test(t)
+    : /% DỰ BÁO/i.test(t)&&(mode==='realtime'
+      ? /% HT NGÀY/i.test(t)&&/(?:DOANH THU|SỐ LƯỢNG)\s*\(RT\)/i.test(t)
+      : /% HT THÁNG/i.test(t)));
+  const shopMatches=!store||competitionEmployeeStoreMatches(store);
+  if(!right||!shopMatches){stable=0;last='';return false;}
+  if(!isSelectedButton(pairButton(mode==='month'?'Lũy kế':'Realtime')))throw Error('Thi đua không còn đúng chế độ yêu cầu.');
+  stable=t===last?stable+1:0;last=t;result=t;
+  return stable>=6;
+ },60000,250);
+ if(!done)throw Error('Chưa xác minh được Thi đua cấp '+level+(store?' shop '+store:'')+'. Giữ tab BI để kiểm tra.');
+ return result;
+}
+async function competitionShops(mode,progress){
+ await setPeriod(mode);
+ if(!await tab('Danh sách'))throw Error('Không thấy chế độ Danh sách.');
+ await allCompetitionPrograms();
+ // An employee view must return via Đà Nẵng before opening either shop.
+ if(competitionLevel()==='Nhân viên'){
+  const back=competitionLink('Đà Nẵng');
+  if(!back)throw Error('Không thấy đường dẫn Đà Nẵng để quay lại.');
+  progress('Đang bấm Đà Nẵng để quay lại danh sách shop…');
+  back.click();await sleep(500);await competitionStable('Siêu thị','',mode);
+ }
+ if(competitionLevel()!=='Siêu thị'){
+  // Normalize an intermediate region/cluster view through the company breadcrumb.
+  const home=competitionLink('Toàn công ty');
+  if(home){home.click();await sleep(500);}
+  await competitionStable('Vùng','',mode);
+  for(const [label,level] of [['Vùng Trung Bộ','Khu vực'],['Đà Nẵng','Siêu thị']]){
+   progress('Thi đua '+(mode==='month'?'Lũy kế':'Realtime')+': đang mở '+label+'…');
+   const target=await waitFor(()=>competitionLink(label),10000);
+   if(!target)throw Error('Không thấy dòng '+label+' trong Thi đua.');
+   target.click();await sleep(500);await competitionStable(level,'',mode);
+  }
+ }
+ const text=await competitionStable('Siêu thị','',mode);
+ if(!competitionLink('Đà Nẵng')||!['933','10341'].every(code=>findCompetitionStore(code)))
+  throw Error('Chưa thấy đủ hai shop tại Đà Nẵng; chưa lấy bảng Thi đua.');
+ return text;
+}
+async function runCompetitionDrilldown(mode,progress,store=''){
+ const text=await competitionShops(mode,progress);
+ if(!store)return {ok:true,text};
+ const target=findCompetitionStore(store);
+ if(!target)throw Error('Không thấy tên shop '+store+'.');
+ progress('Đang mở Thi đua nhân viên Lũy kế shop '+store+'…');
+ target.click();await sleep(500);
+ return {ok:true,text:await competitionStable('Nhân viên',store,mode),store};
+}
+
 // Thi đua: Lũy kế/Realtime + "Danh sách", lọc Khu vực, Tải lại, đợi "N chương trình".
 async function runCompete(mode, progress) {
-  if (/login|signin|dang-nhap/i.test(location.pathname)) return { ok: false, error: 'Chưa đăng nhập BI. Hãy đăng nhập BI rồi thử lại.' };
-  const ready = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 25000);
-  if (!ready) return { ok: false, error: 'Không thấy bộ lọc BI (có thể chưa đăng nhập hoặc giao diện đã đổi).' };
-  progress('Đang chọn bộ lọc…');
-  await setPeriod(mode);
-  const dl = bs().find((x) => btxt(x) === 'Danh sách');
-  if (dl && !isSelectedButton(dl)) { dl.click(); await sleep(500); }
-  const ae = await area();
-  if (ae) return { ok: false, error: 'Không chọn được Siêu thị: ' + ae };
-  const rb = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 15000);
-  if (!rb) return { ok: false, error: 'Không thấy nút Tải lại.' };
-  rb[0].click();
-  progress('Đang tải dữ liệu từ BI…');
-  await sleep(2500);
-  let last = '', stable = 0;
-  const end = Date.now() + 90000;
-  while (Date.now() < end) {
-    const busy = document.querySelector('[aria-busy=true],.animate-spin,[class*=spinner]');
-    const t = pageText();
-    if (!busy && /\d+\s+chương trình/i.test(t) && /% DỰ BÁO/.test(t)) {
-      stable = t === last ? stable + 1 : 0;
-      if (stable >= 6) return { ok: true, text: t };
-    } else stable = 0;
-    last = t;
-    await sleep(200);
-  }
-  return { ok: false, error: 'BI tải quá lâu (90 giây). Thử lại sau.' };
+ return runCompetitionDrilldown(mode,progress);
 }
 
 // ---- Nhân viên ----
@@ -272,9 +411,9 @@ function inspectBiControls(){
   const relevant=e=>/Chi tiết doanh thu|Lũy kế|Luỹ kế|Realtime|DT thực|DT quy đổi|Tỷ trọng trả góp|^Xem$|^Tất cả vùng$|^Vùng Trung Bộ$|^Đà Nẵng$/.test(txt(e))&&txt(e).length<100;
   const controls=[...document.querySelectorAll('button,label,[role=checkbox],span')].filter(e=>vis(e)&&relevant(e));
   const stores=[...document.querySelectorAll('button,a,[role=button],td')].filter(e=>vis(e)&&['933','10341'].some(code=>matchesCompetitionStore(txt(e),code)));
-  const describe=e=>({tag:e.tagName,text:txt(e),className:e.getAttribute('class'),role:e.getAttribute('role'),ariaChecked:e.getAttribute('aria-checked'),ariaPressed:e.getAttribute('aria-pressed'),background:getComputedStyle(e).backgroundColor,html:e.outerHTML.slice(0,1800)});
-  const navigationControls=location.pathname==='/dashboard/tra-cham'?[...document.querySelectorAll('a,button,span,div,[role=button]')].filter(e=>vis(e)&&/^(Tất cả vùng|Vùng Trung Bộ|Đà Nẵng|Tỷ trọng trả góp|Xem)$/.test(txt(e))).slice(0,20).map(describe):[];
-  return {ok:true,extensionVersion:chrome.runtime.getManifest?.().version,recognitionRevision:typeof SkstRecognition!=='undefined'?SkstRecognition.current.revision:null,sourceHints:biSourceHints(),path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe),navigationControls,installmentLevel:location.pathname==='/dashboard/tra-cham'?installmentHeading():null};
+  const describe=e=>({tag:e.tagName,text:txt(e),className:e.getAttribute('class'),role:e.getAttribute('role'),ariaChecked:e.getAttribute('aria-checked'),ariaPressed:e.getAttribute('aria-pressed'),background:getComputedStyle(e).backgroundColor,checked:e.matches('input[type=checkbox]')?e.checked:null,html:e.outerHTML.slice(0,1800)});
+  const navigationControls=['/dashboard/tra-cham','/dashboard/thi-dua'].includes(location.pathname)?[...document.querySelectorAll('a,button,span,div,[role=button]')].filter(e=>vis(e)&&/^(Tất cả vùng|Vùng Trung Bộ|Đà Nẵng|Tỷ trọng trả góp|Xem)$/.test(txt(e))).slice(0,20).map(describe):[];
+  return {ok:true,extensionVersion:chrome.runtime.getManifest?.().version,recognitionRevision:typeof SkstRecognition!=='undefined'?SkstRecognition.current.revision:null,sourceHints:biSourceHints(),pickerSearchInputs:[...document.querySelectorAll('input[placeholder]')].filter(vis).map(e=>({placeholder:e.placeholder,html:e.outerHTML.slice(0,1500)})),storePickerHtml:storePicker()?.outerHTML.slice(0,24000)||null,storeFilterControls:storePicker()?[...storePicker().querySelectorAll('input,button,label,svg')].slice(0,80).map(describe):[],path:location.pathname,controls:controls.slice(0,35).map(describe),storeControls:stores.slice(0,8).map(describe),navigationControls,installmentLevel:location.pathname==='/dashboard/tra-cham'?installmentHeading():null};
 }
 
 // Thi đua nhân viên của một siêu thị: lọc khu vực, Tải lại, bấm đúng tên siêu thị để vào danh sách nhân viên.
@@ -282,6 +421,7 @@ function employeeCompetitionView(){
  const text=pageText();return /HẠNG TRONG ST/i.test(text)&&!/HẠNG VÙNG/i.test(text);
 }
 async function runEmpComp(mode, progress, store) {
+  if(mode==='month')return runCompetitionDrilldown(mode,progress,store);
   if (/login|signin|dang-nhap/i.test(location.pathname)) return { ok: false, error: 'Chưa đăng nhập BI.' };
   const ready = await waitFor(() => bs().filter((x) => /Tải lại/i.test(btxt(x))), 25000);
   if (!ready) return { ok: false, error: 'Không thấy bộ lọc BI.' };
@@ -439,6 +579,7 @@ async function runChecked(m,progress){
   requestedStore=m.store;requestedPeriod=m.mode;
   await waitFor(()=>bs().find(x=>m.job==='installment'?btxt(x)==='Xem':/Tải lại/i.test(btxt(x))),25000);
   for(const button of bs().filter(x=>/^(Ngành hàng|Nhóm hàng)/.test(btxt(x)) && btxt(x)!=='Ngành hàng BI')){
+    if(['compete','empComp'].includes(m.job)&&/^Ngành hàng \(chương trình\)/.test(btxt(button)))continue;
     if(!/Chọn\s*$/.test(btxt(button)))throw Error('BI còn bộ lọc ngành/nhóm hàng. Bỏ bộ lọc đó trước để lấy đủ báo cáo.');
   }
   const fn={revenue:run,compete:runCompete,empRev:runEmpRev,empComp:runEmpComp,installment:runInstallment}[m.job];
