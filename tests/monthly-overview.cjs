@@ -40,7 +40,7 @@ const missing=structuredClone(data);delete missing.dt_luyke[1]['DT TRẢ GÓP (T
 assert.equal(build({},'ALL',now).actual,null);assert.equal(build({},'ALL',now).forecast,null);assert.equal(build({dt_luyke:[rev('933',0,0,0)]},'933',now).convertedPct,null);
 const Monthly=load('src/views/MonthlyOverview.tsx').MonthlyOverview;
 for(const scope of ['ALL','933','10341']){const markup=server.renderToStaticMarkup(React.createElement(Monthly,{appData:data,scope,onChangeScope(){}}));assert(markup.includes('Phạm vi tổng quan tháng'));assert(markup.includes('Toàn cụm — 2 siêu thị'));assert(markup.includes('TGDĐ — 351 Nguyễn Hữu Thọ'));assert(markup.includes('TopZone — 351 Nguyễn Hữu Thọ'));assert(!markup.includes('NaN')&&!markup.includes('Infinity'));}
-const empty=server.renderToStaticMarkup(React.createElement(Monthly,{appData:{},scope:'ALL',onChangeScope(){}}));assert(empty.includes('Chưa có doanh thu lũy kế'));assert(!empty.includes('NaN'));
+const empty=server.renderToStaticMarkup(React.createElement(Monthly,{appData:{},scope:'ALL',onChangeScope(){}}));assert(empty.includes('Chưa có lũy kế: TGDĐ, TopZone'));assert(empty.includes('Chỉ số chưa đủ dữ liệu hiển thị “—”.'));assert(!empty.includes('NaN')&&!empty.includes('Infinity'));
 for(const [id,source] of Object.entries(files))if(/\.[jt]sx?$/.test(id))Babel.transform(source,{filename:id,presets:[['typescript',{allExtensions:true,isTSX:id.endsWith('.tsx')}],'react'],plugins:['transform-modules-commonjs']});
 console.log('PASS weighted ratios, store scope, forecast, contest units, staff identity, missing/zero data, no realtime double counting, nonmutation, SSR and source compilation.');
 const TestRenderer=require('react-test-renderer');
@@ -50,5 +50,14 @@ TestRenderer.act(()=>{tree=TestRenderer.create(React.createElement(Harness));});
 const select=()=>tree.root.findByProps({'aria-label':'Phạm vi tổng quan tháng'});
 assert.equal(select().props.value,'ALL');
 for(const scope of ['933','10341','ALL']){TestRenderer.act(()=>select().props.onChange({target:{value:scope}}));assert.equal(select().props.value,scope);assert(tree.root.findAllByType('h2')[0].children.join('').includes(scope==='ALL'?'Toàn cụm':scope==='933'?'TGDĐ':'TopZone'));}
-const done=tree.root.findAllByType('button').find(b=>b.children.join('')==='Đã đạt');TestRenderer.act(()=>done.props.onClick());assert.equal(tree.root.findAllByType('article').length,0);TestRenderer.act(()=>tree.unmount());
+// KPI cards also use <article>; count only competition cards.
+const programs=()=>tree.root.findAll(node=>node.type==='article'&&node.props['data-achieved']!==undefined);
+assert.equal(programs().length,2);
+const done=tree.root.findByProps({'data-filter':'DONE'});
+TestRenderer.act(()=>done.props.onClick());
+assert.equal(tree.root.findByProps({'data-filter':'DONE'}).props['aria-pressed'],true);
+assert.equal(programs().length,0);
+TestRenderer.act(()=>tree.root.findByProps({'data-filter':'ALL'}).props.onClick());
+assert.equal(programs().length,2);
+TestRenderer.act(()=>tree.unmount());
 console.log('PASS interactive scope selection and contest filter.');
