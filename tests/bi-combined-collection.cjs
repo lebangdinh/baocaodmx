@@ -1,15 +1,31 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 async function filters(){
- let selected={'933':false,'10341':false,'1099':true},clicks=0;
- const label=code=>({offsetWidth:10,textContent:code+' - Shop',querySelector:()=>({checked:selected[code]}),click(){selected[code]=!selected[code];clicks++}});
- const button={offsetParent:{},innerText:'Siêu thị',click(){}};
- const document={querySelectorAll:selector=>selector==='button'?[button]:selector==='label'?Object.keys(selected).map(label):[]};
- const c=vm.createContext({document,chrome:{runtime:{onConnect:{addListener(){}}}},setTimeout:fn=>fn(),Date});
- vm.runInContext(fs.readFileSync('extension/baocaodmx-bi/bi.js','utf8'),c);
- vm.runInContext("requestedStore='both'",c);assert.equal(await vm.runInContext('area()',c),'');
- assert.deepEqual(selected,{'933':true,'10341':true,'1099':false});assert.equal(clicks,3);
- assert.equal(await vm.runInContext('area()',c),'');assert.equal(clicks,3,'Already correct selection must not be toggled');
- vm.runInContext("requestedStore='933'",c);assert.equal(await vm.runInContext('area()',c),'');assert.deepEqual(selected,{'933':true,'10341':false,'1099':false});
+ const {JSDOM}=require('jsdom');
+ for(const placeholder of ['Tìm siêu thị…','Tìm công ty, vùng, cụm, khu vực, siêu thị...']){
+  const dom=new JSDOM(`<button id="open">Siêu thị Chọn</button><div id="picker" hidden><input placeholder="${placeholder}"><button id="clear">Bỏ chọn tất cả</button><div id="rows"></div></div>`,{runScripts:'outside-only'});
+  const c=dom.getInternalVMContext();
+  c.chrome={runtime:{onConnect:{addListener(){}}}};
+  vm.runInContext(`
+   Element.prototype.getClientRects=function(){return this.closest('[hidden]')?[]:[{}]};
+   Object.defineProperty(HTMLElement.prototype,'offsetWidth',{get(){return this.closest('[hidden]')?0:10}});
+   Object.defineProperty(HTMLElement.prototype,'offsetParent',{get(){return this.closest('[hidden]')?null:document.body}});
+   var selected={'933':false,'10341':false,'1099':true};
+   function render(){
+    document.querySelector('#rows').innerHTML=Object.keys(selected).map(code=>'<label><input type="checkbox" data-code="'+code+'" '+(selected[code]?'checked':'')+'>'+code+' - Shop</label>').join('');
+    document.querySelectorAll('[data-code]').forEach(e=>e.onchange=()=>{selected[e.dataset.code]=e.checked;render()});
+   }
+   document.querySelector('#open').onclick=()=>document.querySelector('#picker').hidden=!document.querySelector('#picker').hidden;
+   document.querySelector('#clear').onclick=()=>{Object.keys(selected).forEach(k=>selected[k]=false);render()};render();
+  `,c);
+  vm.runInContext(fs.readFileSync('extension/baocaodmx-bi/bi.js','utf8').replace('const sleep = (ms) => new Promise((r) => setTimeout(r, ms));','const sleep = async () => {};'),c);
+  for(const store of ['both','both','933','10341']){
+   vm.runInContext('requestedStore='+JSON.stringify(store),c);
+   assert.equal(await vm.runInContext('area()',c),'');
+   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(selected)',c)),{'933':store==='both'||store==='933','10341':store==='both'||store==='10341','1099':false});
+   assert(c.document.querySelector('#picker').hidden,'Picker must close before capture');
+  }
+  dom.window.close();
+ }
 }
 async function collection(fail=false){
  const calls=[],navigations=[];let commit,creates=0;
