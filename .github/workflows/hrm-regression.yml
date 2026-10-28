@@ -27,3 +27,5 @@ jobs:
       - run: node tests/realtime-personnel.cjs
       - run: node tests/bi-employee-store-switch.cjs
       - run: node tests/bi-release-package.cjs
+
+      - run: node tests/monthly-overview.cjs
